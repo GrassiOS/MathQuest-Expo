@@ -126,7 +126,7 @@ export default function QuizScreen() {
     if (val === 'x') {
       setInput(input.slice(0, -1));
       triggerBounceAnimation();
-    } else if (val === 'OK') {
+    } else if (val === 'OK!') {
       // Submit logic here
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } else {

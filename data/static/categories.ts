@@ -40,3 +40,6 @@ export const categories: Record<string, Category> = {
         bgColor2: "#C71BED",
     },
 };
+
+
+//2.0

@@ -3,6 +3,7 @@ import DrawPad, { DrawPadHandle } from "expo-drawpad";
 import { useFonts } from 'expo-font';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router, useLocalSearchParams } from 'expo-router';
 import LottieView from 'lottie-react-native';
 import React, { useRef, useState } from 'react';
 import { Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -10,20 +11,20 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const USER_1 = {
+import { competitiveMascotAnimations } from '@/data/static/lotties';
+import { categories } from '../data/static/categories';
+import { Question } from '../types/question';
+
+const INITIAL_USER_1 = {
   name: 'GRASSYOG',
-  score: 1,
-  avatar: '🤖',
+  avatar: 'G',
   hasPlus: true,
 };
-const USER_2 = {
+const INITIAL_USER_2 = {
   name: 'TESTUSER',
-  score: 2,
-  avatar: '👑',
+  avatar: 'T',
   hasPlus: false,
 };
-
-const QUESTION = '234-12';
 
 const NUMPAD = [
   [1, 2, 3],
@@ -36,9 +37,28 @@ const NUMPAD = [
 const { width, height } = Dimensions.get('window');
 
 export default function QuizScreen() {
-  const drawPadRef = useRef<DrawPadHandle>(null);
+  const params = useLocalSearchParams();
+  const categoryId = params.categoryId as string || 'resta';
+  const bgColor1 = params.bgColor1 as string || '#537BFD';
+  const bgColor2 = params.bgColor2 as string || '#7EE1FF';
+  const questionsParam = params.questions as string;
+  
+  const category = categories[categoryId] || categories.resta;
+  
+  // Parse questions from params
+  const questions: Question[] = questionsParam ? JSON.parse(questionsParam) : [];
+  
+  // State management
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [user1Score, setUser1Score] = useState(0);
+  const [user2Score, setUser2Score] = useState(0);
   const [input, setInput] = useState('');
   const [showDrawPad, setShowDrawPad] = useState(false);
+  const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
+  const [showResult, setShowResult] = useState(false);
+  
+  const drawPadRef = useRef<DrawPadHandle>(null);
+  const currentQuestion = questions[currentQuestionIndex];
   const [fontsLoaded] = useFonts({
     Digitalt: require('../assets/fonts/Digitalt.otf'),
   });
@@ -119,7 +139,43 @@ export default function QuizScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
+  const checkAnswer = () => {
+    if (!currentQuestion || input.trim() === '') return;
+    
+    const isCorrect = input.trim() === currentQuestion.respuestaCorrecta;
+    setIsAnswerCorrect(isCorrect);
+    setShowResult(true);
+    
+    if (isCorrect) {
+      setUser1Score(prev => prev + 1);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    
+    // Auto advance after 2 seconds
+    setTimeout(() => {
+      nextQuestion();
+    }, 2000);
+  };
+  
+  const nextQuestion = () => {
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+      setInput('');
+      setIsAnswerCorrect(null);
+      setShowResult(false);
+    } else {
+      // Quiz finished - could navigate to results screen
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      // For now, just reset to first question or navigate back
+      router.back();
+    }
+  };
+
   const handlePress = (val: string | number) => {
+    if (showResult) return; // Don't allow input while showing result
+    
     // Haptic feedback
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
@@ -127,8 +183,7 @@ export default function QuizScreen() {
       setInput(input.slice(0, -1));
       triggerBounceAnimation();
     } else if (val === 'OK') {
-      // Submit logic here
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      checkAnswer();
     } else {
       setInput(input + val);
       triggerBounceAnimation();
@@ -142,7 +197,7 @@ export default function QuizScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#537BFD', '#7EE1FF']}
+        colors={[bgColor1, bgColor2]}
         style={styles.gradientBackground}
       />
       
@@ -151,20 +206,27 @@ export default function QuizScreen() {
         <View style={styles.competitiveHeader}>
           <View style={styles.playerSection}>
             <View style={styles.playerRow}>
-              <Text style={styles.avatarEmoji}>{USER_1.avatar}</Text>
+              <Text style={styles.avatarEmoji}>{INITIAL_USER_1.avatar}</Text>
               <View style={styles.playerInfo}>
-                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>{USER_1.name}</Text>
-                <Text style={[styles.playerScore, { fontFamily: 'Digitalt' }]}>{USER_1.score.toString().padStart(2, '0')}</Text>
+                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>{INITIAL_USER_1.name}</Text>
+                <Text style={[styles.playerScore, { fontFamily: 'Digitalt' }]}>{user1Score.toString().padStart(2, '0')}</Text>
               </View>
             </View>
           </View>
           
+          {/* Progress indicator */}
+          <View style={styles.progressSection}>
+            <Text style={[styles.progressText, { fontFamily: 'Digitalt' }]}>
+              {currentQuestionIndex + 1}/{questions.length}
+            </Text>
+          </View>
+          
           <View style={styles.playerSection}>
             <View style={styles.playerRow}>
-              <Text style={styles.avatarEmoji}>{USER_2.avatar}</Text>
+              <Text style={styles.avatarEmoji}>{INITIAL_USER_2.avatar}</Text>
               <View style={styles.playerInfo}>
-                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>{USER_2.name}</Text>
-                <Text style={[styles.playerScore, { fontFamily: 'Digitalt' }]}>{USER_2.score.toString().padStart(2, '0')}</Text>
+                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>{INITIAL_USER_2.name}</Text>
+                <Text style={[styles.playerScore, { fontFamily: 'Digitalt' }]}>{user2Score.toString().padStart(2, '0')}</Text>
               </View>
             </View>
           </View>
@@ -177,7 +239,7 @@ export default function QuizScreen() {
         {/* Lottie Character */}
         <View style={styles.lottieContainer}>
           <LottieView
-            source={require('../assets/lotties/Quitin/Quitin_1v1_Idle.json')}
+            source={competitiveMascotAnimations[category.mascotName as keyof typeof competitiveMascotAnimations]}
             autoPlay
             loop
             style={styles.lottieAnimation}
@@ -186,17 +248,35 @@ export default function QuizScreen() {
 
         {/* Math Problem */}
         <View style={styles.questionContainer}>
-          <Text style={[styles.questionText, { fontFamily: 'Digitalt' }]}>{QUESTION}</Text>
+          <Text style={[styles.questionText, { fontFamily: 'Digitalt' }]}>
+            {currentQuestion?.texto || 'Loading...'}
+          </Text>
         </View>
+        
+        {/* Confetti Animation for Correct Answers */}
+        {showResult && isAnswerCorrect && (
+          <View style={styles.confettiContainer}>
+            <LottieView
+              source={require('../assets/lotties/extras/Confetti_quick.json')}
+              autoPlay
+              loop={false}
+              style={styles.confettiAnimation}
+            />
+          </View>
+        )}
 
         {/* Answer Input */}
         <Animated.View style={[
           styles.answerContainer,
-          { transform: [{ scale: bounceAnim }] }
+          { transform: [{ scale: bounceAnim }] },
+          showResult && isAnswerCorrect ? styles.answerContainerCorrect : null,
+          showResult && !isAnswerCorrect ? styles.answerContainerIncorrect : null,
         ]}>
           <Text style={[
             styles.answerText,
             input === '' ? styles.answerTextEmpty : null,
+            showResult && isAnswerCorrect ? styles.answerTextCorrect : null,
+            showResult && !isAnswerCorrect ? styles.answerTextIncorrect : null,
             { fontFamily: 'Digitalt' }
           ]}>
             {input || '0'}
@@ -368,6 +448,19 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
   },
+  progressSection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
   // Lottie Character Styles
   lottieContainer: {
     alignItems: 'center',
@@ -413,6 +506,35 @@ const styles = StyleSheet.create({
   },
   answerTextEmpty: {
     color: '#9ca3af',
+  },
+  answerContainerCorrect: {
+    backgroundColor: '#dcfce7', // Light green background
+    borderWidth: 2,
+    borderColor: '#22c55e', // Green border
+  },
+  answerContainerIncorrect: {
+    backgroundColor: '#fef2f2', // Light red background
+    borderWidth: 2,
+    borderColor: '#ef4444', // Red border
+  },
+  answerTextCorrect: {
+    color: '#15803d', // Dark green text
+  },
+  answerTextIncorrect: {
+    color: '#dc2626', // Dark red text
+  },
+  confettiContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    pointerEvents: 'none',
+  },
+  confettiAnimation: {
+    width: '100%',
+    height: '100%',
   },
   // Calculator Styles
   calculatorGrid: {
@@ -466,7 +588,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -5,
     right: -5,
-    backgroundColor: '#ef4444',
+    backgroundColor: '#000000',
     borderRadius: 10,
     width: 20,
     height: 20,

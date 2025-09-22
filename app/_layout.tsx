@@ -25,8 +25,31 @@ export default function RootLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="roulette-screen" />
-      <Stack.Screen name="quiz-screen" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen 
+        name="matchmaking-screen" 
+        options={{ 
+          presentation: 'fullScreenModal',
+          gestureEnabled: false,
+          animation: 'slide_from_bottom'
+        }} 
+      />
+      <Stack.Screen 
+        name="roulette-screen" 
+        options={{ 
+          presentation: 'fullScreenModal',
+          gestureEnabled: false,
+          animation: 'slide_from_right'
+        }} 
+      />
+      <Stack.Screen 
+        name="quiz-screen" 
+        options={{ 
+          presentation: 'fullScreenModal',
+          gestureEnabled: false,
+          animation: 'slide_from_right'
+        }} 
+      />
     </Stack>
   );
 }

@@ -168,8 +168,8 @@ export default function QuizScreen() {
     } else {
       // Quiz finished - could navigate to results screen
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      // For now, just reset to first question or navigate back
-      router.back();
+      // Navigate back to tabs (dismissing all modals)
+      router.dismissAll();
     }
   };
 

@@ -1,9 +1,14 @@
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import React from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { LayeredAvatar } from '@/components/LayeredAvatar';
+import { useAvatar } from '@/contexts/AvatarContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -22,6 +27,13 @@ export default function UserScreen() {
     'Gilroy-Black': require('../../assets/fonts/Gilroy-Black.ttf'),
   });
 
+  const { avatar: userAvatar } = useAvatar();
+
+  const handleCustomizeAvatar = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push('/avatar-customization-screen');
+  };
+
   if (!fontsLoaded) {
     return (
       <View style={styles.loadingContainer}>
@@ -33,7 +45,7 @@ export default function UserScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#1a0b3d', '#6b46c1']}
+        colors={['#6b46c1', '#6b46c1']}
         style={styles.gradientBackground}
       />
 
@@ -49,11 +61,20 @@ export default function UserScreen() {
           {/* User Profile Section */}
           <View style={styles.profileSection}>
             <View style={styles.avatarContainer}>
-              <View style={styles.avatarCircle}>
-                <Text style={[styles.avatarText, { fontFamily: 'Digitalt' }]}>
-                  {USER_1.avatar}
-                </Text>
-              </View>
+              <TouchableOpacity 
+                style={styles.avatarCircle}
+                onPress={handleCustomizeAvatar}
+                activeOpacity={0.8}
+              >
+                <LayeredAvatar 
+                  avatar={userAvatar}
+                  size={110}
+                  style={styles.layeredAvatar}
+                />
+                <View style={styles.customizeOverlay}>
+                  <FontAwesome5 name="edit" size={16} color="#fff" />
+                </View>
+              </TouchableOpacity>
               <View style={styles.levelBadge}>
                 <Text style={[styles.levelText, { fontFamily: 'Digitalt' }]}>
                   {USER_1.level}
@@ -64,13 +85,6 @@ export default function UserScreen() {
             <Text style={[styles.userName, { fontFamily: 'Digitalt' }]}>
               {USER_1.name}
             </Text>
-            
-            <View style={styles.scoreContainer}>
-              <FontAwesome5 name="trophy" size={20} color="#FFD616" />
-              <Text style={[styles.userScore, { fontFamily: 'Digitalt' }]}>
-                {USER_1.score} Points
-              </Text>
-            </View>
           </View>
 
           {/* Stats Section */}
@@ -204,7 +218,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#4f46e5',
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
@@ -214,11 +228,23 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 15,
+    position: 'relative',
   },
-  avatarText: {
-    color: '#fff',
-    fontSize: 48,
-    fontWeight: 'bold',
+  layeredAvatar: {
+    borderRadius: 55,
+  },
+  customizeOverlay: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#7c3aed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   levelBadge: {
     position: 'absolute',

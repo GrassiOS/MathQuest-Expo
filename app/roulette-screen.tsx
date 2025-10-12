@@ -7,6 +7,7 @@ import React, { useRef, useState } from 'react';
 import { Animated, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useGame } from '@/contexts/GameContext';
 import { categories } from '../data/static/categories';
 import { questions } from '../data/static/questions';
 import { Category } from '../types/Category';
@@ -36,6 +37,7 @@ export default function RouletteScreen() {
     'Gilroy-Black': require('../assets/fonts/Gilroy-Black.ttf'),
   });
 
+  const { gameState, setCategory, setQuestions } = useGame();
   const [isSpinning, setIsSpinning] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -82,8 +84,12 @@ export default function RouletteScreen() {
       
       // Navigate to quiz after a short delay
       setTimeout(() => {
+        // Set category and questions in game context
+        setCategory(targetCategory);
+        
         // Get 5 random questions for the selected category
         const selectedQuestions = getRandomQuestionsByCategory(targetCategory.id, questions);
+        setQuestions(selectedQuestions);
         
         router.push({
           pathname: '/quiz-screen',

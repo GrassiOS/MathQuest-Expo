@@ -176,7 +176,7 @@ export default function AvatarCustomizationScreen() {
           </TouchableOpacity>
           
           <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>
-            PERSONALIZAR AVATAR
+            PERSONALIZAR AVATAR!
           </Text>
           
           <View style={styles.headerSpacer} />

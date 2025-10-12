@@ -10,22 +10,18 @@ import { LayeredAvatar } from '@/components/LayeredAvatar';
 import AnimatedMathBackground from '@/components/ui/AnimatedMathBackground';
 import GameModeButton from '@/components/ui/GameModeButton';
 import { useAvatar } from '@/contexts/AvatarContext';
+import { useGame } from '@/contexts/GameContext';
 
 const { height } = Dimensions.get('window');
 
-const USER_1 = {
-  name: 'GRASSYOG',
-  score: 1,
-  avatar: 'G',
-};
-
-export default function PlayScreen() {
+export default function OnlineGameScreen() {
   const [fontsLoaded] = useFonts({
-    Digitalt: require('../../assets/fonts/Digitalt.otf'),
-    'Gilroy-Black': require('../../assets/fonts/Gilroy-Black.ttf'),
+    Digitalt: require('../assets/fonts/Digitalt.otf'),
+    'Gilroy-Black': require('../assets/fonts/Gilroy-Black.ttf'),
   });
 
   const { avatar: userAvatar } = useAvatar();
+  const { startNewGame } = useGame();
 
   if (!fontsLoaded) {
     return (
@@ -38,7 +34,7 @@ export default function PlayScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#A855F7', '#7C3AED']}
+        colors={['#FF5EA3', '#FF3D7F']} //red gradient
         style={styles.gradientBackground}
       />
       <AnimatedMathBackground />
@@ -59,31 +55,30 @@ export default function PlayScreen() {
 
         {/* Center title */}
         <View style={styles.titleWrap}>
-          <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>SELECCIONA{"\n"}MODO DE JUEGO!</Text>
+          <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>ELIGE MODO ONLINE</Text>
         </View>
 
         {/* Game mode buttons */}
         <View style={styles.buttonsWrap}>
           <GameModeButton
-            name="ONLINE!"
-            route="/online-game"
+            name="COMPETITIVO"
+            route="/matchmaking-screen"
             gradientColors={["#FFA65A", "#FF5EA3"]}
-            imagePath={require('../../assets/images/competitive/1v1_roulette.png')}
-            onPress={() => router.push('/online-game')}
+            imagePath={require('../assets/images/competitive/1v1_roulette.png')}
+            onPress={() => {
+              startNewGame();
+              router.push('/matchmaking-screen');
+            }}
           />
           <GameModeButton
-            name="AVENTURA!"
-            route="/infinite-game"
-            gradientColors={["#8EF06E", "#31C45A"]}
-            imagePath={require('../../assets/images/competitive/1v1_roulette.png')}
-            onPress={() => router.push('/infinite-game')}
-          />
-          <GameModeButton
-            name="INFINITO!"
-            route="/infinite-game"
+            name="JUGAR CON AMIGOS"
+            route="/matchmaking-screen"
             gradientColors={["#6CCBFF", "#5B9FED"]}
-            imagePath={require('../../assets/images/competitive/1v1_roulette.png')}
-            onPress={() => router.push('/infinite-game')}
+            imagePath={require('../assets/images/competitive/1v1_roulette.png')}
+            onPress={() => {
+              startNewGame();
+              router.push('/matchmaking-screen');
+            }}
           />
         </View>
       </SafeAreaView>
@@ -169,3 +164,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
+

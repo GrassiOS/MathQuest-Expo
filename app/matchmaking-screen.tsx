@@ -1,13 +1,15 @@
-import { FontAwesome5 } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import LottieView from 'lottie-react-native';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
+import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LayeredAvatar } from '@/components/LayeredAvatar';
+import { useAvatar } from '@/contexts/AvatarContext';
+import { useGame } from '@/contexts/GameContext';
 import RouletteScreen from './roulette-screen';
 
 const { width, height } = Dimensions.get('window');
@@ -32,6 +34,8 @@ export default function MatchmakingScreen() {
     'Gilroy-Black': require('../assets/fonts/Gilroy-Black.ttf'),
   });
 
+  const { avatar: userAvatar } = useAvatar();
+  const { gameState, startNewGame, addPlayer, findOpponent } = useGame();
   const [state, setState] = useState<MatchmakingState>('searching');
   const [searchingDots, setSearchingDots] = useState('');
 
@@ -68,12 +72,26 @@ export default function MatchmakingScreen() {
     }
   }, [state]);
 
+  // Initialize game and add user
+  useEffect(() => {
+    startNewGame();
+    addPlayer({
+      id: 'user',
+      name: USER_1.name,
+      avatar: userAvatar,
+      isConnected: true,
+    });
+  }, []);
+
   // Main matchmaking flow
   useEffect(() => {
     let timeouts: NodeJS.Timeout[] = [];
 
     if (state === 'searching') {
       console.log('🔍 Starting search phase');
+      
+      // Start finding opponent
+      findOpponent();
       
       // Simulate search time (5-10 seconds)
       const searchTimeout = setTimeout(() => {
@@ -252,9 +270,11 @@ export default function MatchmakingScreen() {
             <View style={styles.avatarWithRing}>
               <View style={styles.fireRingStroke} />
               <View style={styles.robotAvatarContainer}>
-                <Text style={[styles.avatarText, { fontFamily: 'Digitalt' }]}>
-                  {USER_1.avatar}
-                </Text>
+                <LayeredAvatar 
+                  avatar={userAvatar}
+                  size={90}
+                  style={styles.layeredAvatar}
+                />
               </View>
             </View>
             <Text style={[styles.userName, { fontFamily: 'Digitalt' }]}>
@@ -331,9 +351,11 @@ export default function MatchmakingScreen() {
               <View style={styles.avatarWithRing}>
                 <View style={styles.fireRingStroke} />
                 <View style={styles.robotAvatarContainer}>
-                  <Text style={[styles.avatarText, { fontFamily: 'Digitalt' }]}>
-                    {USER_1.avatar}
-                  </Text>
+                  <LayeredAvatar 
+                    avatar={userAvatar}
+                    size={90}
+                    style={styles.layeredAvatar}
+                  />
                 </View>
               </View>
               <Text style={[styles.foundUserName, { fontFamily: 'Digitalt' }]}>
@@ -450,17 +472,15 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#5b21b6',
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
     borderColor: '#fff',
     zIndex: 2,
   },
-  avatarText: {
-    color: '#fff',
-    fontSize: 40,
-    fontWeight: '900',
+  layeredAvatar: {
+    borderRadius: 45,
   },
   userName: {
     color: '#fff',

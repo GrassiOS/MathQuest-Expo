@@ -23,7 +23,7 @@ export default function TabLayout() {
         },
         tabBarBackground: () => (
           <LinearGradient
-            colors={['#1a0b3d', '#6b46c1']}
+            colors={['#6b46c1', '#6b46c1']}
             style={StyleSheet.absoluteFillObject}
           />
         ),

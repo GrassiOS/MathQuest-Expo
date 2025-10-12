@@ -11,6 +11,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LayeredAvatar } from '@/components/LayeredAvatar';
+import { useAvatar } from '@/contexts/AvatarContext';
+import { useGame } from '@/contexts/GameContext';
 import { competitiveMascotAnimations } from '@/data/static/lotties';
 import { categories } from '../data/static/categories';
 import { Question } from '../types/question';
@@ -43,22 +46,23 @@ export default function QuizScreen() {
   const bgColor2 = params.bgColor2 as string || '#7EE1FF';
   const questionsParam = params.questions as string;
   
+  const { avatar: userAvatar } = useAvatar();
+  const { gameState, submitAnswer, nextQuestion, getCurrentQuestion, getOpponent } = useGame();
   const category = categories[categoryId] || categories.resta;
   
   // Parse questions from params
   const questions: Question[] = questionsParam ? JSON.parse(questionsParam) : [];
   
   // State management
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [user1Score, setUser1Score] = useState(0);
-  const [user2Score, setUser2Score] = useState(0);
   const [input, setInput] = useState('');
   const [showDrawPad, setShowDrawPad] = useState(false);
   const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
   const [showResult, setShowResult] = useState(false);
   
   const drawPadRef = useRef<DrawPadHandle>(null);
-  const currentQuestion = questions[currentQuestionIndex];
+  const currentQuestion = getCurrentQuestion();
+  const user = gameState.players[0];
+  const opponent = getOpponent();
   const [fontsLoaded] = useFonts({
     Digitalt: require('../assets/fonts/Digitalt.otf'),
   });
@@ -140,14 +144,13 @@ export default function QuizScreen() {
   };
 
   const checkAnswer = () => {
-    if (!currentQuestion || input.trim() === '') return;
+    if (!currentQuestion || input.trim() === '' || !user) return;
     
-    const isCorrect = input.trim() === currentQuestion.respuestaCorrecta;
+    const isCorrect = submitAnswer(user.id, input.trim());
     setIsAnswerCorrect(isCorrect);
     setShowResult(true);
     
     if (isCorrect) {
-      setUser1Score(prev => prev + 1);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     } else {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -155,22 +158,17 @@ export default function QuizScreen() {
     
     // Auto advance after 2 seconds
     setTimeout(() => {
-      nextQuestion();
+      if (gameState.currentQuestion < gameState.totalQuestions - 1) {
+        nextQuestion();
+        setInput('');
+        setIsAnswerCorrect(null);
+        setShowResult(false);
+      } else {
+        // Game finished - navigate to results
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        router.push('/game-results-screen');
+      }
     }, 2000);
-  };
-  
-  const nextQuestion = () => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-      setInput('');
-      setIsAnswerCorrect(null);
-      setShowResult(false);
-    } else {
-      // Quiz finished - could navigate to results screen
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      // Navigate back to tabs (dismissing all modals)
-      router.dismissAll();
-    }
   };
 
   const handlePress = (val: string | number) => {
@@ -206,10 +204,15 @@ export default function QuizScreen() {
         <View style={styles.competitiveHeader}>
           <View style={styles.playerSection}>
             <View style={styles.playerRow}>
-              <Text style={styles.avatarEmoji}>{INITIAL_USER_1.avatar}</Text>
+              <View style={styles.avatarEmojiContainer}>
+                <LayeredAvatar 
+                  avatar={userAvatar}
+                  size={35}
+                />
+              </View>
               <View style={styles.playerInfo}>
-                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>{INITIAL_USER_1.name}</Text>
-                <Text style={[styles.playerScore, { fontFamily: 'Digitalt' }]}>{user1Score.toString().padStart(2, '0')}</Text>
+                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>{user?.name || INITIAL_USER_1.name}</Text>
+                <Text style={[styles.playerScore, { fontFamily: 'Digitalt' }]}>{user?.score.toString().padStart(2, '0') || '00'}</Text>
               </View>
             </View>
           </View>
@@ -217,16 +220,18 @@ export default function QuizScreen() {
           {/* Progress indicator */}
           <View style={styles.progressSection}>
             <Text style={[styles.progressText, { fontFamily: 'Digitalt' }]}>
-              {currentQuestionIndex + 1}/{questions.length}
+              {gameState.currentQuestion + 1}/{gameState.totalQuestions}
             </Text>
           </View>
           
           <View style={styles.playerSection}>
             <View style={styles.playerRow}>
-              <Text style={styles.avatarEmoji}>{INITIAL_USER_2.avatar}</Text>
+              <View style={styles.avatarEmojiContainer}>
+                <Text style={styles.avatarEmoji}>{opponent?.avatar || INITIAL_USER_2.avatar}</Text>
+              </View>
               <View style={styles.playerInfo}>
-                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>{INITIAL_USER_2.name}</Text>
-                <Text style={[styles.playerScore, { fontFamily: 'Digitalt' }]}>{user2Score.toString().padStart(2, '0')}</Text>
+                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>{opponent?.name || INITIAL_USER_2.name}</Text>
+                <Text style={[styles.playerScore, { fontFamily: 'Digitalt' }]}>{opponent?.score.toString().padStart(2, '0') || '00'}</Text>
               </View>
             </View>
           </View>
@@ -250,6 +255,13 @@ export default function QuizScreen() {
         <View style={styles.questionContainer}>
           <Text style={[styles.questionText, { fontFamily: 'Digitalt' }]}>
             {currentQuestion?.texto || 'Loading...'}
+          </Text>
+        </View>
+        
+        {/* Timer */}
+        <View style={styles.timerContainer}>
+          <Text style={[styles.timerText, { fontFamily: 'Digitalt' }]}>
+            {gameState.timeRemaining}s
           </Text>
         </View>
         
@@ -437,6 +449,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 40,
   },
+  avatarEmojiContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
   playerName: {
     color: '#fff',
     fontSize: 12,
@@ -485,6 +506,20 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     letterSpacing: 2,
+  },
+  timerContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginBottom: 15,
+  },
+  timerText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+    textAlign: 'center',
   },
   answerContainer: {
     backgroundColor: '#fff',

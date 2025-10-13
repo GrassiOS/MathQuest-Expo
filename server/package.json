@@ -1,0 +1,20 @@
+{
+  "name": "mathquest-websocket-server",
+  "version": "1.0.0",
+  "description": "WebSocket server for MathQuest 1v1 online game",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "ws": "^8.14.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["websocket", "game", "mathquest"],
+  "author": "MathQuest Team",
+  "license": "MIT"
+}

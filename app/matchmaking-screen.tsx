@@ -8,8 +8,10 @@ import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from '
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LayeredAvatar } from '@/components/LayeredAvatar';
+import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useGame } from '@/contexts/GameContext';
+import { useWebSocket } from '@/hooks/useWebSocket';
 import RouletteScreen from './roulette-screen';
 
 const { width, height } = Dimensions.get('window');
@@ -20,7 +22,8 @@ const USER_1 = {
   avatar: 'G',
 };
 
-const OPPONENT = {
+// This will be replaced with actual opponent data from WebSocket
+const DEFAULT_OPPONENT = {
   name: 'TESTUSER01341ZQ...',
   score: 3,
   avatar: 'T',
@@ -34,10 +37,44 @@ export default function MatchmakingScreen() {
     'Gilroy-Black': require('../assets/fonts/Gilroy-Black.ttf'),
   });
 
+  const { user } = useAuth();
   const { avatar: userAvatar } = useAvatar();
   const { gameState, startNewGame, addPlayer, findOpponent } = useGame();
   const [state, setState] = useState<MatchmakingState>('searching');
   const [searchingDots, setSearchingDots] = useState('');
+  
+  // WebSocket connection for online matchmaking
+  const {
+    isConnected,
+    matchData,
+    joinQueue,
+    disconnect: disconnectWebSocket
+  } = useWebSocket(
+    user?.id,
+    user?.username || 'Player',
+    userAvatar
+  );
+
+  // Start searching when component mounts
+  useEffect(() => {
+    if (user?.id && user?.username && userAvatar && isConnected) {
+      joinQueue();
+    }
+  }, [user?.id, user?.username, userAvatar, isConnected, joinQueue]);
+
+  // Get opponent data from match data
+  const getOpponent = () => {
+    if (!matchData || !user?.id) return DEFAULT_OPPONENT;
+    
+    const opponent = matchData.players.find(player => player.id !== user.id);
+    return opponent ? {
+      name: opponent.username,
+      score: 0,
+      avatar: opponent.avatar
+    } : DEFAULT_OPPONENT;
+  };
+
+  const opponent = getOpponent();
 
   // Animation refs
   const lupaOpacity = useRef(new Animated.Value(1)).current;
@@ -83,12 +120,91 @@ export default function MatchmakingScreen() {
     });
   }, []);
 
-  // Main matchmaking flow
+  // Handle WebSocket match found
+  useEffect(() => {
+    if (matchData && state === 'searching') {
+      console.log('🎯 Match found via WebSocket:', matchData);
+      
+      // Start transition to found state
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      
+      // Fade out title, fade in new title
+      Animated.sequence([
+        Animated.timing(titleFadeAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(titleFadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // Fade out lupa and cancel button
+      Animated.parallel([
+        Animated.timing(lupaOpacity, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(cancelOpacity, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // After fade out, show versus screen
+      setTimeout(() => {
+        console.log('🎭 Changing state to found');
+        setState('found');
+        
+        // Start with invisible state to prevent flash
+        versusOpacity.setValue(0);
+        versusScale.setValue(0.8);
+        opponentSlideAnim.setValue(height);
+        elementsOpacity.setValue(1); // Make sure elements are visible initially
+        
+        console.log('🎬 Starting found state animations');
+        
+        // Animate versus screen and opponent smoothly
+        Animated.parallel([
+          Animated.timing(versusOpacity, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.spring(versusScale, {
+            toValue: 1,
+            tension: 40,
+            friction: 8,
+            useNativeDriver: true,
+          }),
+          Animated.timing(opponentSlideAnim, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          console.log('✅ Found state animations complete');
+          
+          // Navigate to lobby screen after animation
+          setTimeout(() => {
+            router.push('/lobby-screen');
+          }, 2000);
+        });
+      }, 600);
+    }
+  }, [matchData, state]);
+
+  // Main matchmaking flow (fallback for offline mode)
   useEffect(() => {
     let timeouts: NodeJS.Timeout[] = [];
 
-    if (state === 'searching') {
-      console.log('🔍 Starting search phase');
+    if (state === 'searching' && !matchData && !isConnected) {
+      console.log('🔍 Starting offline search phase');
       
       // Start finding opponent
       findOpponent();
@@ -177,7 +293,7 @@ export default function MatchmakingScreen() {
         transitionTimeoutRef.current = null;
       }
     };
-  }, [state]);
+  }, [state, matchData, isConnected]);
 
   // Separate effect to handle the ambitious transition
   useEffect(() => {
@@ -198,6 +314,7 @@ export default function MatchmakingScreen() {
 
   const handleCancel = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    disconnectWebSocket();
     router.dismiss();
   };
 
@@ -235,8 +352,8 @@ export default function MatchmakingScreen() {
         console.log('✅ Step 3 Complete: Screen peeled away');
         console.log('🎯 Navigating to roulette screen');
         
-        // Transition complete - navigate to roulette
-        router.push('/roulette-screen');
+        // Transition complete - navigate to online game screen
+        router.push('/online-game-screen');
       });
     });
   };
@@ -261,7 +378,7 @@ export default function MatchmakingScreen() {
           {/* Title */}
           <Animated.View style={[styles.titleContainer, { opacity: titleFadeAnim }]}>
             <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>
-              BUSCANDO{'\n'}OPONENTE{searchingDots}
+              BUSCANDO{searchingDots}
             </Text>
           </Animated.View>
 
@@ -278,7 +395,7 @@ export default function MatchmakingScreen() {
               </View>
             </View>
             <Text style={[styles.userName, { fontFamily: 'Digitalt' }]}>
-              {USER_1.name}
+              {user?.username || USER_1.name}
             </Text>
           </View>
 
@@ -359,7 +476,7 @@ export default function MatchmakingScreen() {
                 </View>
               </View>
               <Text style={[styles.foundUserName, { fontFamily: 'Digitalt' }]}>
-                {USER_1.name}
+                {user?.username || USER_1.name}
               </Text>
             </View>
           </Animated.View>
@@ -400,12 +517,14 @@ export default function MatchmakingScreen() {
           <Animated.View style={{ opacity: elementsOpacity }}>
             <View style={styles.foundOpponentAvatarSection}>
               <View style={styles.opponentAvatarContainer}>
-                <Text style={[styles.avatarText, { fontFamily: 'Digitalt' }]}>
-                  {OPPONENT.avatar}
-                </Text>
+                <LayeredAvatar 
+                  avatar={opponent.avatar}
+                  size={90}
+                  style={styles.layeredAvatar}
+                />
               </View>
               <Text style={[styles.foundOpponentName, { fontFamily: 'Digitalt' }]}>
-                {OPPONENT.name}
+                {opponent.name}
               </Text>
             </View>
           </Animated.View>
@@ -618,7 +737,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#dc2626',
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,

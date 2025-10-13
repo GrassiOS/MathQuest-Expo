@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LayeredAvatar } from '@/components/LayeredAvatar';
 import AnimatedMathBackground from '@/components/ui/AnimatedMathBackground';
 import GameModeButton from '@/components/ui/GameModeButton';
+import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useGame } from '@/contexts/GameContext';
 
@@ -20,6 +21,7 @@ export default function OnlineGameScreen() {
     'Gilroy-Black': require('../assets/fonts/Gilroy-Black.ttf'),
   });
 
+  const { user } = useAuth();
   const { avatar: userAvatar } = useAvatar();
   const { startNewGame } = useGame();
 

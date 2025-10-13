@@ -2,8 +2,8 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -37,27 +37,114 @@ export default function RouletteScreen() {
     'Gilroy-Black': require('../assets/fonts/Gilroy-Black.ttf'),
   });
 
+  const params = useLocalSearchParams();
+  const categoryId = params.categoryId as string;
+  const bgColor1 = params.bgColor1 as string || '#8b5cf6';
+  const bgColor2 = params.bgColor2 as string || '#a855f7';
+  const questionsParam = params.questions as string;
+  
   const { gameState, setCategory, setQuestions } = useGame();
   const [isSpinning, setIsSpinning] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [isOnlineMode, setIsOnlineMode] = useState(false);
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const buttonScaleAnim = useRef(new Animated.Value(1)).current;
 
-  const spinRoulette = () => {
-    if (isSpinning) return;
+  // Check if we're in online mode and auto-spin to predetermined category
+  useEffect(() => {
+    console.log('🎰 Roulette screen useEffect triggered');
+    console.log('🎰 categoryId:', categoryId);
+    console.log('🎰 questionsParam:', questionsParam ? 'Present' : 'Missing');
+    
+    if (categoryId && questionsParam) {
+      console.log('🎰 Setting online mode and auto-spinning');
+      setIsOnlineMode(true);
+      const targetCategory = categories[categoryId];
+      if (targetCategory) {
+        console.log('🎰 Target category found:', targetCategory.displayName);
+        // Auto-spin to the predetermined category after a short delay
+        setTimeout(() => {
+          console.log('🎰 Starting auto-spin to category');
+          spinToCategory(targetCategory);
+        }, 1000);
+      } else {
+        console.error('🎰 Category not found for ID:', categoryId);
+      }
+    } else {
+      console.log('🎰 Offline mode - no auto-spin');
+    }
+  }, [categoryId, questionsParam]);
 
-    // Predetermined category (you can change this logic)
-    const targetCategory = categoryArray[Math.floor(Math.random() * categoryArray.length)];
+  const spinToCategory = (targetCategory: Category) => {
+    console.log('🎰 spinToCategory called for:', targetCategory.displayName);
+    console.log('🎰 isSpinning:', isSpinning);
+    
+    if (isSpinning) {
+      console.log('🎰 Already spinning, returning');
+      return;
+    }
+
     const targetIndex = categoryArray.findIndex(cat => cat.id === targetCategory.id);
+    console.log('🎰 Target index:', targetIndex);
     
     // Calculate target rotation
     const targetAngle = 360 - (targetIndex * SEGMENT_ANGLE) + (SEGMENT_ANGLE / 2);
     const spins = 5; // Number of full rotations
     const finalRotation = spins * 360 + targetAngle;
+    console.log('🎰 Final rotation:', finalRotation);
 
     setIsSpinning(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+    // Roulette spin animation
+    Animated.timing(rotateAnim, {
+      toValue: finalRotation,
+      duration: 3000,
+      useNativeDriver: true,
+    }).start(() => {
+      console.log('🎰 Animation completed, setting selected category');
+      setSelectedCategory(targetCategory);
+      setIsSpinning(false);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+
+      // Set up the game with the selected category and questions
+      setCategory(targetCategory);
+      
+      if (isOnlineMode && questionsParam) {
+        console.log('🎰 Using online mode questions');
+        // Use questions from WebSocket for online mode
+        const parsedQuestions = JSON.parse(questionsParam);
+        setQuestions(parsedQuestions);
+      } else {
+        console.log('🎰 Using offline mode questions');
+        // Generate random questions for offline mode
+        const categoryQuestions = getRandomQuestionsByCategory(targetCategory.id, questions);
+        setQuestions(categoryQuestions);
+      }
+
+      // Navigate to quiz screen after delay
+      console.log('🎰 Setting up navigation to quiz screen in 2 seconds');
+      setTimeout(() => {
+        console.log('🎰 Navigating to quiz screen');
+        router.push({
+          pathname: '/quiz-screen',
+          params: {
+            categoryId: targetCategory.id,
+            bgColor1,
+            bgColor2,
+            questions: JSON.stringify(isOnlineMode && questionsParam ? JSON.parse(questionsParam) : getRandomQuestionsByCategory(targetCategory.id, questions))
+          }
+        });
+      }, 2000);
+    });
+  };
+
+  const spinRoulette = () => {
+    if (isSpinning) return;
+
+    // For offline mode, use random category
+    const targetCategory = categoryArray[Math.floor(Math.random() * categoryArray.length)];
+    
     // Button animation
     Animated.sequence([
       Animated.timing(buttonScaleAnim, {
@@ -72,36 +159,7 @@ export default function RouletteScreen() {
       }),
     ]).start();
 
-    // Roulette spin animation
-    Animated.timing(rotateAnim, {
-      toValue: finalRotation,
-      duration: 3000,
-      useNativeDriver: true,
-    }).start(() => {
-      setSelectedCategory(targetCategory);
-      setIsSpinning(false);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      
-      // Navigate to quiz after a short delay
-      setTimeout(() => {
-        // Set category and questions in game context
-        setCategory(targetCategory);
-        
-        // Get 5 random questions for the selected category
-        const selectedQuestions = getRandomQuestionsByCategory(targetCategory.id, questions);
-        setQuestions(selectedQuestions);
-        
-        router.push({
-          pathname: '/quiz-screen',
-          params: { 
-            categoryId: targetCategory.id,
-            bgColor1: targetCategory.bgColor1,
-            bgColor2: targetCategory.bgColor2,
-            questions: JSON.stringify(selectedQuestions)
-          }
-        });
-      }, 1500);
-    });
+    spinToCategory(targetCategory);
   };
 
 
@@ -121,7 +179,7 @@ export default function RouletteScreen() {
     return (
       <View style={styles.container}>
         <LinearGradient
-          colors={['#1a0b3d', '#6b46c1']}
+          colors={[bgColor1, bgColor2]}
           style={styles.gradientBackground}
         />
       
@@ -190,25 +248,27 @@ export default function RouletteScreen() {
           </View>
         )}
 
-        {/* Spin Button */}
-        <Animated.View style={{ transform: [{ scale: buttonScaleAnim }] }}>
-          <TouchableOpacity
-            onPress={spinRoulette}
-            disabled={isSpinning}
-            style={styles.spinButtonContainer}
-          >
-            <LinearGradient
-              colors={isSpinning ? ['#999', '#666'] : ['#FFD616', '#F65D00']}
-              style={styles.spinButton}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+        {/* Spin Button - Only show in offline mode */}
+        {!isOnlineMode && (
+          <Animated.View style={{ transform: [{ scale: buttonScaleAnim }] }}>
+            <TouchableOpacity
+              onPress={spinRoulette}
+              disabled={isSpinning}
+              style={styles.spinButtonContainer}
             >
-              <Text style={[styles.spinButtonText, { fontFamily: 'Gilroy-Black' }]}>
-                {isSpinning ? 'Girando...' : 'Listo?'}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
+              <LinearGradient
+                colors={isSpinning ? ['#999', '#666'] : ['#FFD616', '#F65D00']}
+                style={styles.spinButton}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Text style={[styles.spinButtonText, { fontFamily: 'Gilroy-Black' }]}>
+                  {isSpinning ? 'Girando...' : 'Listo?'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
       </View>
     </View>
   );

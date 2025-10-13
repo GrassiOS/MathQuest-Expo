@@ -96,6 +96,38 @@ export default function RootLayout() {
                     animation: 'slide_from_right'
                   }} 
                 />
+                <Stack.Screen 
+                  name="lobby-screen" 
+                  options={{ 
+                    presentation: 'fullScreenModal',
+                    gestureEnabled: false,
+                    animation: 'slide_from_bottom'
+                  }} 
+                />
+                <Stack.Screen 
+                  name="online-game-screen" 
+                  options={{ 
+                    presentation: 'fullScreenModal',
+                    gestureEnabled: false,
+                    animation: 'slide_from_right'
+                  }} 
+                />
+                <Stack.Screen 
+                  name="round-result-screen" 
+                  options={{ 
+                    presentation: 'fullScreenModal',
+                    gestureEnabled: false,
+                    animation: 'fade'
+                  }} 
+                />
+                <Stack.Screen 
+                  name="match-end-screen" 
+                  options={{ 
+                    presentation: 'fullScreenModal',
+                    gestureEnabled: false,
+                    animation: 'fade'
+                  }} 
+                />
               </Stack>
             </OfflineStorageProvider>
           </GameProvider>

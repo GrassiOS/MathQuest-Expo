@@ -4,11 +4,10 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React from 'react';
-import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LayeredAvatar } from '@/components/LayeredAvatar';
-import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
 
 const { width, height } = Dimensions.get('window');
@@ -29,36 +28,10 @@ export default function UserScreen() {
   });
 
   const { avatar: userAvatar } = useAvatar();
-  const { user, signOut } = useAuth();
 
   const handleCustomizeAvatar = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/avatar-customization-screen');
-  };
-
-  const handleLogout = () => {
-    Alert.alert(
-      'Cerrar Sesión',
-      '¿Estás seguro de que quieres cerrar sesión?',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-        {
-          text: 'Cerrar Sesión',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await signOut();
-              router.replace('/login' as any);
-            } catch (error) {
-              Alert.alert('Error', 'No se pudo cerrar la sesión');
-            }
-          },
-        },
-      ]
-    );
   };
 
   if (!fontsLoaded) {
@@ -110,10 +83,7 @@ export default function UserScreen() {
             </View>
             
             <Text style={[styles.userName, { fontFamily: 'Digitalt' }]}>
-              {user?.username || USER_1.name}
-            </Text>
-            <Text style={[styles.userEmail, { fontFamily: 'Gilroy-Black' }]}>
-              {user?.email}
+              {USER_1.name}
             </Text>
           </View>
 
@@ -195,20 +165,6 @@ export default function UserScreen() {
                 </View>
               </View>
             </View>
-          </View>
-
-          {/* Logout Section */}
-          <View style={styles.logoutSection}>
-            <TouchableOpacity 
-              style={styles.logoutButton}
-              onPress={handleLogout}
-              activeOpacity={0.8}
-            >
-              <FontAwesome5 name="sign-out-alt" size={20} color="#ef4444" />
-              <Text style={[styles.logoutText, { fontFamily: 'Digitalt' }]}>
-                CERRAR SESIÓN
-              </Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -312,12 +268,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  userEmail: {
-    color: '#9ca3af',
-    fontSize: 14,
-    fontWeight: 'normal',
     marginBottom: 15,
   },
   scoreContainer: {
@@ -411,26 +361,5 @@ const styles = StyleSheet.create({
   },
   achievementDescLocked: {
     color: '#6b7280',
-  },
-  logoutSection: {
-    paddingHorizontal: 30,
-    paddingBottom: 30,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderRadius: 15,
-    padding: 15,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
-  },
-  logoutText: {
-    color: '#ef4444',
-    fontSize: 16,
-    fontWeight: 'bold',
-    letterSpacing: 1,
   },
 });

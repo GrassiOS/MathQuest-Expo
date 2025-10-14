@@ -366,7 +366,7 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any,
           opponentFinished: false,
           showOpponentFinishAnimation: false
         }));
-        console.log('🎯 State updated with roundResult');
+        //console.log('🎯 State updated with roundResult');
         break;
 
       case WEBSOCKET_EVENTS.BOTH_PLAYERS_READY_FOR_RESULTS:
@@ -476,8 +476,8 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any,
     const currentMatchData = state.matchData || initialMatchData;
     
     console.log('🎯 sendFinishedQuiz called with score:', score);
-    console.log('🎯 currentMatchData:', currentMatchData);
-    console.log('🎯 playerId:', playerId);
+    //console.log('🎯 currentMatchData:', currentMatchData);
+    //console.log('🎯 playerId:', playerId);
     
     if (currentMatchData?.matchId && playerId) {
       console.log('🎯 Sending FINISHED_QUIZ message');
@@ -487,16 +487,16 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any,
         score
       });
     } else {
-      console.warn('🎯 Cannot send FINISHED_QUIZ - missing matchData or playerId');
+      //console.warn('🎯 Cannot send FINISHED_QUIZ - missing matchData or playerId');
     }
   }, [state.matchData, initialMatchData, playerId, sendMessage]);
 
   const sendReadyForNextRound = useCallback(() => {
     const currentMatchData = state.matchData || initialMatchData;
     
-    console.log('🎯 sendReadyForNextRound called');
-    console.log('🎯 currentMatchData:', currentMatchData);
-    console.log('🎯 playerId:', playerId);
+    //console.log('🎯 sendReadyForNextRound called');
+    //console.log('🎯 currentMatchData:', currentMatchData);
+    //console.log('🎯 playerId:', playerId);
     
     if (currentMatchData?.matchId && playerId) {
       console.log('🎯 Sending READY_FOR_NEXT_ROUND message');
@@ -511,13 +511,13 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any,
 
   const sendReadyToViewResults = useCallback(() => {
     const currentMatchData = state.matchData || initialMatchData;
-    
-    console.log('🎯 sendReadyToViewResults called');
-    console.log('🎯 currentMatchData:', currentMatchData);
-    console.log('🎯 playerId:', playerId);
-    
+
+    //console.log('🎯 sendReadyToViewResults called');
+    //console.log('🎯 currentMatchData:', currentMatchData);
+    //console.log('🎯 playerId:', playerId);
+
     if (currentMatchData?.matchId && playerId) {
-      console.log('🎯 Sending READY_TO_VIEW_RESULTS message');
+      //console.log('🎯 Sending READY_TO_VIEW_RESULTS message');
       sendMessage(WEBSOCKET_EVENTS.READY_TO_VIEW_RESULTS, {
         matchId: currentMatchData.matchId,
         playerId

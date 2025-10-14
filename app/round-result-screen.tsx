@@ -41,13 +41,29 @@ export default function RoundResultScreen() {
   const roundResult = roundResultParam ? JSON.parse(roundResultParam) : null;
   const matchData = matchDataParam ? JSON.parse(matchDataParam) : null;
   
+  // Use WebSocket roundResult if available, otherwise use navigation params
+  const effectiveRoundResult = wsRoundResult || roundResult;
+  
+  // Debug logging
+  console.log('🎯 RoundResultScreen mounted with:', {
+    waitingForOpponent,
+    roundResultParam: roundResultParam ? 'Available' : 'null',
+    matchDataParam: matchDataParam ? 'Available' : 'null',
+    roundResult: roundResult ? 'Parsed successfully' : 'null',
+    wsRoundResult: wsRoundResult ? 'Available from WebSocket' : 'null',
+    effectiveRoundResult: effectiveRoundResult ? 'Available' : 'null',
+    matchData: matchData ? 'Parsed successfully' : 'null'
+  });
+  
   // WebSocket connection for sending ready for next round
   const { 
     sendReadyForNextRound, 
     sendReadyToViewResults,
     isConnected,
     bothPlayersReadyForResults,
-    resultsDelay
+    resultsDelay,
+    roundResult: wsRoundResult,
+    showResults: wsShowResults
   } = useWebSocket(
     user?.id,
     user?.username || 'Player',
@@ -78,10 +94,10 @@ export default function RoundResultScreen() {
   let isWinner = false;
   let mascotAsset = competitiveMascotAnimations.Plusito;
   
-  if (roundResult && user?.id) {
+  if (effectiveRoundResult && user?.id) {
     // Get scores from server result
-    const userScoreData = roundResult.scores[user.id];
-    const opponentScoreData = roundResult.scores[opponent?.id];
+    const userScoreData = effectiveRoundResult.scores[user.id];
+    const opponentScoreData = effectiveRoundResult.scores[opponent?.id];
     
     if (userScoreData && opponentScoreData) {
       // Convert server scores (points) to correct answers count
@@ -90,8 +106,8 @@ export default function RoundResultScreen() {
     }
     
     // Use mascot from server data
-    if (roundResult.mascotAsset) {
-      mascotAsset = competitiveMascotAnimations[roundResult.mascotAsset as keyof typeof competitiveMascotAnimations] || competitiveMascotAnimations.Plusito;
+    if (effectiveRoundResult.mascotAsset) {
+      mascotAsset = competitiveMascotAnimations[effectiveRoundResult.mascotAsset as keyof typeof competitiveMascotAnimations] || competitiveMascotAnimations.Plusito;
     }
   } else {
     // Fallback to simulated data if no server data
@@ -126,8 +142,17 @@ export default function RoundResultScreen() {
 
   // Handle both players ready for results
   useEffect(() => {
-    if (bothPlayersReadyForResults && !waitingForOpponent) {
-      console.log('🎯 Both players ready for results, starting fade-in sequence');
+    console.log('🎯 username:', user?.username);
+    console.log('🎯 [LOG] [LOG] bothPlayersReadyForResults_____8==D:', bothPlayersReadyForResults);
+    console.log('🎯 [LOG] [LOG] waitingForOpponent_____8==D:', waitingForOpponent);
+    console.log('🎯 [LOG] [LOG] roundResult_____8==D:', roundResult ? 'Available' : 'null');
+    console.log('🎯 [LOG] [LOG] wsRoundResult_____8==D:', wsRoundResult ? 'Available' : 'null');
+    console.log('🎯 [LOG] [LOG] effectiveRoundResult_____8==D:', effectiveRoundResult ? 'Available' : 'null');
+
+    // If we have roundResult data from server, we should show results immediately
+    // The waitingForOpponent is only for the initial state when player finishes first
+    if (bothPlayersReadyForResults || effectiveRoundResult) {
+      console.log('🎯 Both players ready for results OR effectiveRoundResult available, starting fade-in sequence');
       setBothPlayersReady(true);
       
       // Start fade-in sequence after delay
@@ -158,15 +183,15 @@ export default function RoundResultScreen() {
           setShowContinueButton(true);
         }, 1500);
         
-      }, resultsDelay);
+      }, effectiveRoundResult ? 500 : resultsDelay); // Shorter delay if we already have results
     }
-  }, [bothPlayersReadyForResults, waitingForOpponent, isWinner, resultsDelay]);
+  }, [bothPlayersReadyForResults, effectiveRoundResult, isWinner, resultsDelay]);
 
   // Handle countup animation for scores
   useEffect(() => {
-    if (showScorePanel && roundResult && user?.id && opponent?.id) {
-      const userFinalScore = roundResult.scores[user.id]?.score || userScore * 100;
-      const opponentFinalScore = roundResult.scores[opponent.id]?.score || opponentScore * 100;
+    if (showScorePanel && effectiveRoundResult && user?.id && opponent?.id) {
+      const userFinalScore = effectiveRoundResult.scores[user.id]?.score || userScore * 100;
+      const opponentFinalScore = effectiveRoundResult.scores[opponent.id]?.score || opponentScore * 100;
       
       // Animate user score
       const userDuration = 2000; // 2 seconds
@@ -206,7 +231,7 @@ export default function RoundResultScreen() {
         clearInterval(userInterval);
       };
     }
-  }, [showScorePanel, roundResult, user?.id, opponent?.id]);
+  }, [showScorePanel, effectiveRoundResult, user?.id, opponent?.id]);
 
   const [showMascot, setShowMascot] = useState(false);
 
@@ -308,7 +333,7 @@ export default function RoundResultScreen() {
           </View>
 
           {/* Score Panel or Waiting Message */}
-          {waitingForOpponent ? (
+          {waitingForOpponent && !effectiveRoundResult ? (
             <View style={styles.waitingPanel}>
               <View style={styles.waitingAnimation}>
                 <LottieView
@@ -325,7 +350,7 @@ export default function RoundResultScreen() {
                 Tu puntaje: {userScore}/{totalQuestions}
               </Text>
             </View>
-          ) : !hasClickedShowResults ? (
+          ) : !hasClickedShowResults && !effectiveRoundResult ? (
             <View style={styles.showResultsContainer}>
               <Text style={[styles.showResultsTitle, { fontFamily: 'Digitalt' }]}>
                 ¡Ambos jugadores terminaron!
@@ -382,7 +407,7 @@ export default function RoundResultScreen() {
           ) : null}
 
           {/* Mascot - only show when showing results */}
-          {!waitingForOpponent && showMascotAnimation && showMascot && isWinner && (
+          {(!waitingForOpponent || effectiveRoundResult) && showMascotAnimation && showMascot && isWinner && (
             <Animated.View style={[
               styles.mascotContainer,
               { 
@@ -403,7 +428,7 @@ export default function RoundResultScreen() {
           )}
 
           {/* Continue Button - only show when showing results */}
-          {!waitingForOpponent && showContinueButton && (
+          {(!waitingForOpponent || effectiveRoundResult) && showContinueButton && (
             <Animated.View
               style={{
                 opacity: showContinueButton ? 1 : 0,

@@ -146,7 +146,7 @@ export default function QuizScreen() {
   // Listen for SHOW_RESULTS to update the results screen with actual data
   useEffect(() => {
     if (showResults && roundResult) {
-      console.log('🎯 SHOW_RESULTS received, updating round result screen');
+      //console.log('🎯 SHOW_RESULTS received, updating round result screen');
       router.push({
         pathname: '/round-result-screen',
         params: {

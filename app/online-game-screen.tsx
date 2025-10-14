@@ -125,7 +125,8 @@ export default function OnlineGameScreen() {
           pathname: '/round-result-screen',
           params: {
             roundResult: JSON.stringify(roundResult),
-            matchData: JSON.stringify(matchData)
+            matchData: JSON.stringify(matchData),
+            waitingForOpponent: 'false' // Explicitly set to false when we have results
           }
         });
         console.log('🎯 Navigation command sent successfully');

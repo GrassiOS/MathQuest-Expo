@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthError, createClient, SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_CONFIG } from './config';
 
@@ -26,9 +27,17 @@ export interface AuthResponse {
 
 class AuthService {
   private supabase: SupabaseClient;
+  private readonly SESSION_STORAGE_KEY = 'supabase_session';
 
   constructor() {
-    this.supabase = createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+    this.supabase = createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
+      auth: {
+        storage: AsyncStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    });
   }
 
   /**
@@ -113,20 +122,41 @@ class AuthService {
    */
   async getCurrentUser(): Promise<AuthUser | null> {
     try {
-      const { data: { user }, error } = await this.supabase.auth.getUser();
+      // First try to get the session
+      const { data: { session }, error: sessionError } = await this.supabase.auth.getSession();
       
-      if (error || !user) {
+      if (sessionError) {
+        console.error('Error getting session:', sessionError);
         return null;
       }
 
+      if (!session?.user) {
+        return null;
+      }
+
+      // If we have a session, return the user
       return {
-        id: user.id,
-        email: user.email || '',
-        username: user.user_metadata?.username,
-        avatar_url: user.user_metadata?.avatar_url,
+        id: session.user.id,
+        email: session.user.email || '',
+        username: session.user.user_metadata?.username,
+        avatar_url: session.user.user_metadata?.avatar_url,
       };
     } catch (error) {
+      console.error('Error getting current user:', error);
       return null;
+    }
+  }
+
+  /**
+   * Check if user has a valid session
+   */
+  async hasValidSession(): Promise<boolean> {
+    try {
+      const { data: { session }, error } = await this.supabase.auth.getSession();
+      return !error && !!session?.user;
+    } catch (error) {
+      console.error('Error checking session:', error);
+      return false;
     }
   }
 
@@ -166,6 +196,42 @@ class AuthService {
    */
   getClient(): SupabaseClient {
     return this.supabase;
+  }
+
+  /**
+   * Clear all authentication data
+   */
+  async clearAuthData(): Promise<void> {
+    try {
+      await this.supabase.auth.signOut();
+      await AsyncStorage.removeItem(this.SESSION_STORAGE_KEY);
+    } catch (error) {
+      console.error('Error clearing auth data:', error);
+    }
+  }
+
+  /**
+   * Refresh the current session
+   */
+  async refreshSession(): Promise<{ user: AuthUser | null; error: any }> {
+    try {
+      const { data, error } = await this.supabase.auth.refreshSession();
+      
+      if (error || !data.session?.user) {
+        return { user: null, error };
+      }
+
+      const authUser: AuthUser = {
+        id: data.session.user.id,
+        email: data.session.user.email || '',
+        username: data.session.user.user_metadata?.username,
+        avatar_url: data.session.user.user_metadata?.avatar_url,
+      };
+
+      return { user: authUser, error: null };
+    } catch (error) {
+      return { user: null, error };
+    }
   }
 }
 

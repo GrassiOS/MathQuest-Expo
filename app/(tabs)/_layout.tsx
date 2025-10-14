@@ -1,10 +1,9 @@
 import { FontAwesome5 } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { StyleSheet } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
+import GradientBackground from '@/components/ui/GradientBackground';
 
 export default function TabLayout() {
   return (
@@ -22,10 +21,9 @@ export default function TabLayout() {
           elevation: 0,
         },
         tabBarBackground: () => (
-          <LinearGradient
-            colors={['#6b46c1', '#6b46c1']}
-            style={StyleSheet.absoluteFillObject}
-          />
+          <GradientBackground colors={['#6b46c1', '#6b46c1']}>
+            <></>
+          </GradientBackground>
         ),
         tabBarActiveTintColor: '#FFD616',
         tabBarInactiveTintColor: '#9ca3af',

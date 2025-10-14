@@ -222,14 +222,15 @@ class MatchManager {
     console.log(`🎯 Setting up ROUND_CATEGORY in 2 seconds`);
     setTimeout(() => {
       console.log(`🎯 Sending ROUND_CATEGORY to players`);
+      console.log(`🎯 Round data being sent:`, JSON.stringify(roundData, null, 2));
       this.broadcastToMatch(match, {
         type: SERVER_EVENTS.ROUND_CATEGORY,
         data: roundData,
         timestamp: Date.now()
       });
       
-      // Start round timer
-      this.roundManager.startRoundTimer(match, this);
+      // Don't start timer yet - let players start the quiz first
+      // Timer will be started when first answer is submitted
     }, 2000); // 2 second delay for wheel animation
   }
 

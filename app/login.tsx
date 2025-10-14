@@ -3,14 +3,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -160,15 +159,7 @@ export default function LoginScreen() {
                 style={styles.loginButton}
               />
 
-              {/* Forgot Password */}
-              <TouchableOpacity
-                style={styles.forgotPasswordContainer}
-                onPress={handleForgotPassword}
-              >
-                <Text style={[styles.forgotPasswordText, { fontFamily: 'Gilroy-Black' }]}>
-                  ¿Olvidaste tu contraseña?
-                </Text>
-              </TouchableOpacity>
+              
 
               {/* Divider */}
               <View style={styles.divider}>

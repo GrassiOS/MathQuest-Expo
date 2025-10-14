@@ -83,9 +83,10 @@ export default function RootLayout() {
                 <Stack.Screen 
                   name="online-game" 
                   options={{ 
-                    presentation: 'fullScreenModal',
-                    gestureEnabled: false,
-                    animation: 'slide_from_bottom'
+                    presentation: 'card',
+                    gestureEnabled: true,
+                    animation: 'slide_from_right',
+                    headerShown: false
                   }} 
                 />
                 <Stack.Screen 

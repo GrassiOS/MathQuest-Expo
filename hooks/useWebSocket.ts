@@ -12,6 +12,9 @@ export const WEBSOCKET_EVENTS = {
   JOIN_QUEUE: 'JOIN_QUEUE',
   PLAYER_READY: 'PLAYER_READY',
   SUBMIT_ANSWER: 'SUBMIT_ANSWER',
+  FINISHED_QUIZ: 'FINISHED_QUIZ',
+  READY_FOR_NEXT_ROUND: 'READY_FOR_NEXT_ROUND',
+  READY_TO_VIEW_RESULTS: 'READY_TO_VIEW_RESULTS',
   RECONNECT: 'RECONNECT',
   
   // Server to Client
@@ -21,6 +24,9 @@ export const WEBSOCKET_EVENTS = {
   TIME_WARNING: 'TIME_WARNING',
   ROUND_END: 'ROUND_END',
   ROUND_RESULT: 'ROUND_RESULT',
+  SHOW_RESULTS: 'SHOW_RESULTS',
+  BOTH_PLAYERS_READY_FOR_RESULTS: 'BOTH_PLAYERS_READY_FOR_RESULTS',
+  OPPONENT_FINISHED: 'OPPONENT_FINISHED',
   MATCH_END: 'MATCH_END',
   ERROR: 'ERROR',
   PLAYER_DISCONNECTED: 'PLAYER_DISCONNECTED',
@@ -102,13 +108,20 @@ export interface WebSocketState {
   timeRemaining: number;
   isPlayerReady: boolean;
   playerDisconnected: string | null;
+  opponentFinished: boolean;
+  showOpponentFinishAnimation: boolean;
+  showResults: boolean;
+  opponentFinishedData: any | null;
+  bothPlayersReadyForResults: boolean;
+  resultsDelay: number;
 }
 
-const WEBSOCKET_URL = 'ws://192.168.1.215:8080'; // Change this to your server URL
+//const WEBSOCKET_URL = 'ws://192.168.1.215:8080'; // Change this to your server URL
+const WEBSOCKET_URL = 'ws://10.41.87.53:8080'; // Change this to your server URL
 const RECONNECT_INTERVAL = 3000;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
-export const useWebSocket = (playerId?: string, username?: string, avatar?: any) => {
+export const useWebSocket = (playerId?: string, username?: string, avatar?: any, initialMatchData?: any) => {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
@@ -118,13 +131,19 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any)
     isConnected: false,
     isConnecting: false,
     error: null,
-    matchData: null,
+    matchData: null, // Don't initialize with initialMatchData to avoid infinite loops
     roundData: null,
     roundResult: null,
     matchEndData: null,
     timeRemaining: 0,
     isPlayerReady: false,
-    playerDisconnected: null
+    playerDisconnected: null,
+    opponentFinished: false,
+    showOpponentFinishAnimation: false,
+    showResults: false,
+    opponentFinishedData: null,
+    bothPlayersReadyForResults: false,
+    resultsDelay: 2500
   });
 
   const connect = useCallback(() => {
@@ -159,6 +178,7 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any)
       ws.onmessage = (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
+          console.log('📨 Raw WebSocket message received:', message.type, message.data);
           handleMessage(message);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -251,7 +271,10 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any)
   }, []);
 
   const handleMessage = useCallback((message: WebSocketMessage) => {
-    console.log('Received message:', message.type, message.data);
+    // Only log important messages
+    if (message.type === 'SHOW_RESULTS' || message.type === 'OPPONENT_FINISHED' || message.type === 'ERROR' || message.type === 'ROUND_CATEGORY') {
+      console.log('📨 Received:', message.type, message.data);
+    }
 
     switch (message.type) {
       case WEBSOCKET_EVENTS.WELCOME:
@@ -271,7 +294,6 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any)
         break;
 
       case WEBSOCKET_EVENTS.ROUND_START:
-        console.log('🎯 ROUND_START received, clearing roundData');
         setState(prev => ({
           ...prev,
           roundData: null,
@@ -281,7 +303,6 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any)
         break;
 
       case WEBSOCKET_EVENTS.ROUND_CATEGORY:
-        console.log('🎯 ROUND_CATEGORY received:', message.data);
         setState(prev => ({
           ...prev,
           roundData: message.data,
@@ -290,10 +311,29 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any)
         break;
 
       case WEBSOCKET_EVENTS.TIME_WARNING:
-        setState(prev => ({
-          ...prev,
-          timeRemaining: message.data.timeRemaining
-        }));
+        console.log('🎮 TIME_WARNING received:', message.data);
+        // Check if this is an opponent finish notification
+        if (message.data.message && (message.data.message.includes('opponent') || message.data.message.includes('Opponent'))) {
+          setState(prev => ({
+            ...prev,
+            opponentFinished: true,
+            showOpponentFinishAnimation: true,
+            timeRemaining: message.data.timeRemaining * 1000 || 15000 // Convert to milliseconds
+          }));
+          
+          // Hide animation after 4 seconds
+          setTimeout(() => {
+            setState(prev => ({
+              ...prev,
+              showOpponentFinishAnimation: false
+            }));
+          }, 4000);
+        } else {
+          setState(prev => ({
+            ...prev,
+            timeRemaining: message.data.timeRemaining
+          }));
+        }
         break;
 
       case WEBSOCKET_EVENTS.ROUND_END:
@@ -307,8 +347,53 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any)
         setState(prev => ({
           ...prev,
           roundResult: message.data,
-          timeRemaining: 0
+          timeRemaining: 0,
+          opponentFinished: false,
+          showOpponentFinishAnimation: false
         }));
+        break;
+
+      case WEBSOCKET_EVENTS.SHOW_RESULTS:
+        console.log('🎯 SHOW_RESULTS received in WebSocket hook:', message.data);
+        console.log('🎯 Setting roundResult to:', message.data.roundResult);
+        console.log('🎯 Setting matchData to:', message.data.matchData);
+        setState(prev => ({
+          ...prev,
+          roundResult: message.data.roundResult,
+          matchData: message.data.matchData,
+          showResults: true,
+          timeRemaining: 0,
+          opponentFinished: false,
+          showOpponentFinishAnimation: false
+        }));
+        console.log('🎯 State updated with roundResult');
+        break;
+
+      case WEBSOCKET_EVENTS.BOTH_PLAYERS_READY_FOR_RESULTS:
+        console.log('🎯 BOTH_PLAYERS_READY_FOR_RESULTS received:', message.data);
+        setState(prev => ({
+          ...prev,
+          bothPlayersReadyForResults: true,
+          resultsDelay: message.data.delay || 2500
+        }));
+        break;
+
+      case WEBSOCKET_EVENTS.OPPONENT_FINISHED:
+        setState(prev => ({
+          ...prev,
+          opponentFinished: true,
+          showOpponentFinishAnimation: true,
+          opponentFinishedData: message.data,
+          timeRemaining: message.data.timeRemaining || 15000
+        }));
+        
+        // Hide animation after 4 seconds and start countdown
+        setTimeout(() => {
+          setState(prev => ({
+            ...prev,
+            showOpponentFinishAnimation: false
+          }));
+        }, 4000);
         break;
 
       case WEBSOCKET_EVENTS.MATCH_END:
@@ -357,13 +442,20 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any)
   }, [playerId, username, avatar, sendMessage]);
 
   const sendPlayerReady = useCallback(() => {
+    console.log('🎮 sendPlayerReady called');
+    console.log('🎮 matchData:', state.matchData);
+    console.log('🎮 playerId:', playerId);
+    
     if (state.matchData) {
+      console.log('🎮 Sending PLAYER_READY message');
       sendMessage(WEBSOCKET_EVENTS.PLAYER_READY, {
         matchId: state.matchData.matchId,
         playerId
       });
       
       setState(prev => ({ ...prev, isPlayerReady: true }));
+    } else {
+      console.error('🎮 No matchData available for PLAYER_READY');
     }
   }, [state.matchData, playerId, sendMessage]);
 
@@ -378,6 +470,62 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any)
       });
     }
   }, [state.matchData, playerId, sendMessage]);
+
+  const sendFinishedQuiz = useCallback((score: number) => {
+    // Use the current matchData from state or fallback to initialMatchData
+    const currentMatchData = state.matchData || initialMatchData;
+    
+    console.log('🎯 sendFinishedQuiz called with score:', score);
+    console.log('🎯 currentMatchData:', currentMatchData);
+    console.log('🎯 playerId:', playerId);
+    
+    if (currentMatchData?.matchId && playerId) {
+      console.log('🎯 Sending FINISHED_QUIZ message');
+      sendMessage(WEBSOCKET_EVENTS.FINISHED_QUIZ, {
+        matchId: currentMatchData.matchId,
+        playerId,
+        score
+      });
+    } else {
+      console.warn('🎯 Cannot send FINISHED_QUIZ - missing matchData or playerId');
+    }
+  }, [state.matchData, initialMatchData, playerId, sendMessage]);
+
+  const sendReadyForNextRound = useCallback(() => {
+    const currentMatchData = state.matchData || initialMatchData;
+    
+    console.log('🎯 sendReadyForNextRound called');
+    console.log('🎯 currentMatchData:', currentMatchData);
+    console.log('🎯 playerId:', playerId);
+    
+    if (currentMatchData?.matchId && playerId) {
+      console.log('🎯 Sending READY_FOR_NEXT_ROUND message');
+      sendMessage(WEBSOCKET_EVENTS.READY_FOR_NEXT_ROUND, {
+        matchId: currentMatchData.matchId,
+        playerId
+      });
+    } else {
+      console.warn('🎯 Cannot send READY_FOR_NEXT_ROUND - missing matchData or playerId');
+    }
+  }, [state.matchData, initialMatchData, playerId, sendMessage]);
+
+  const sendReadyToViewResults = useCallback(() => {
+    const currentMatchData = state.matchData || initialMatchData;
+    
+    console.log('🎯 sendReadyToViewResults called');
+    console.log('🎯 currentMatchData:', currentMatchData);
+    console.log('🎯 playerId:', playerId);
+    
+    if (currentMatchData?.matchId && playerId) {
+      console.log('🎯 Sending READY_TO_VIEW_RESULTS message');
+      sendMessage(WEBSOCKET_EVENTS.READY_TO_VIEW_RESULTS, {
+        matchId: currentMatchData.matchId,
+        playerId
+      });
+    } else {
+      console.warn('🎯 Cannot send READY_TO_VIEW_RESULTS - missing matchData or playerId');
+    }
+  }, [state.matchData, initialMatchData, playerId, sendMessage]);
 
   const reconnect = useCallback(() => {
     if (playerId) {
@@ -398,6 +546,7 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any)
       return () => clearTimeout(connectTimeout);
     }
   }, [playerId, username, avatar, state.isConnected, state.isConnecting, connect]);
+
 
   // Cleanup on unmount
   useEffect(() => {
@@ -430,6 +579,9 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any)
     joinQueue,
     sendPlayerReady,
     submitAnswer,
+    sendFinishedQuiz,
+    sendReadyForNextRound,
+    sendReadyToViewResults,
     reconnect,
     
     // Utilities

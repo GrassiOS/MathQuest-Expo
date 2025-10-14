@@ -3,7 +3,7 @@ import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React from 'react';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LayeredAvatar } from '@/components/LayeredAvatar';
@@ -13,7 +13,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useGame } from '@/contexts/GameContext';
 
+
 const { height } = Dimensions.get('window');
+
 
 export default function OnlineGameScreen() {
   const [fontsLoaded] = useFonts({
@@ -33,17 +35,22 @@ export default function OnlineGameScreen() {
     );
   }
 
+
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#FF5EA3', '#FF3D7F']} //red gradient
+        colors={['#FF5EA3', '#FF3D7F']}
         style={styles.gradientBackground}
       />
       <AnimatedMathBackground />
 
-      <SafeAreaView style={styles.safeArea}>
-        {/* Top-right avatar + coins */}
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
+        {/* Top bar with back button and avatar + coins */}
         <View style={styles.topBar}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <FontAwesome5 name="chevron-left" size={20} color="#fff" />
+          </TouchableOpacity>
+          
           <View style={styles.avatarBlock}>
             <View style={styles.avatarCircle}>
               <LayeredAvatar avatar={userAvatar} size={64} style={styles.layeredAvatar} />
@@ -133,9 +140,19 @@ const styles = StyleSheet.create({
     borderRadius: 34,
   },
   topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     paddingHorizontal: 20,
     paddingTop: 10,
-    alignItems: 'flex-end',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarBlock: {
     alignItems: 'center',

@@ -51,6 +51,7 @@ export default function OnlineGameScreen() {
     roundData,
     timeRemaining,
     submitAnswer,
+    sendFinishedQuiz,
     roundResult,
     matchEndData
   } = useWebSocket(
@@ -58,6 +59,26 @@ export default function OnlineGameScreen() {
     user?.username || 'Player',
     userAvatar
   );
+
+  // Debug logging
+  useEffect(() => {
+    console.log('🎯 Online game screen state update:', {
+      isConnected,
+      matchData: matchData?.matchId,
+      roundData: roundData?.category?.displayName,
+      roundResult: roundResult ? 'received' : 'none',
+      matchEndData: matchEndData ? 'received' : 'none'
+    });
+    
+    // Additional debugging for roundResult
+    if (roundResult) {
+      console.log('🎯 roundResult details:', {
+        winnerId: roundResult.winnerId,
+        scores: roundResult.scores,
+        category: roundResult.category
+      });
+    }
+  }, [isConnected, matchData, roundData, roundResult, matchEndData]);
 
   // Handle round start
   useEffect(() => {
@@ -92,15 +113,25 @@ export default function OnlineGameScreen() {
 
   // Handle round result
   useEffect(() => {
+    console.log('🎯 roundResult useEffect triggered:', { roundResult, matchData });
     if (roundResult) {
-      // Navigate to round result screen
-      router.push({
-        pathname: '/round-result-screen',
-        params: {
-          roundResult: JSON.stringify(roundResult),
-          matchData: JSON.stringify(matchData)
-        }
+      console.log('🎯 Navigating to round result screen with data:', {
+        roundResult,
+        matchData
       });
+      try {
+        // Navigate to round result screen
+        router.push({
+          pathname: '/round-result-screen',
+          params: {
+            roundResult: JSON.stringify(roundResult),
+            matchData: JSON.stringify(matchData)
+          }
+        });
+        console.log('🎯 Navigation command sent successfully');
+      } catch (error) {
+        console.error('🎯 Navigation error:', error);
+      }
     }
   }, [roundResult, matchData]);
 
@@ -149,11 +180,31 @@ export default function OnlineGameScreen() {
     // Submit to server
     submitAnswer(currentQuestion.id, input.trim(), timeTaken);
 
-    // Move to next question
+    // Move to next question or finish quiz
     if (currentQuestionIndex < roundData.questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
       setInput('');
       setQuestionStartTime(Date.now());
+    } else {
+      // Quiz finished - calculate final score and send FINISHED_QUIZ
+      const finalScore = Object.values(answers).reduce((score, answerData) => {
+        const question = roundData.questions.find(q => q.id === Object.keys(answers).find(key => answers[key] === answerData));
+        if (question && answerData.answer === question.respuestaCorrecta) {
+          return score + 1;
+        }
+        return score;
+      }, 0);
+      
+      // Add current question to score if correct
+      const currentQuestionCorrect = input.trim() === currentQuestion.respuestaCorrecta;
+      const totalScore = finalScore + (currentQuestionCorrect ? 1 : 0);
+      
+      console.log('🎯 Quiz finished! Final score:', totalScore);
+      
+      // Send FINISHED_QUIZ message
+      if (sendFinishedQuiz && matchData) {
+        sendFinishedQuiz(totalScore);
+      }
     }
   };
 

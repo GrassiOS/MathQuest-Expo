@@ -198,6 +198,10 @@ class RoundManager {
     const shuffledQuestions = this.shuffleArray([...categoryQuestions]);
     const selectedQuestions = shuffledQuestions.slice(0, GAME_CONFIG.QUESTIONS_PER_ROUND);
     
+    console.log(`🎯 Generated round for category: ${selectedCategory} with ${selectedQuestions.length} questions`);
+    console.log(`🎯 Questions:`, selectedQuestions.map(q => q.texto));
+    console.log(`🎯 First question details:`, selectedQuestions[0]);
+    
     return {
       category: selectedQuestions[0].category,
       questions: selectedQuestions
@@ -213,7 +217,8 @@ class RoundManager {
       startTime: Date.now(),
       timeRemaining: GAME_CONFIG.TIME_PER_QUESTION,
       warningSent: false,
-      timer: null
+      timer: null,
+      results: {} // Initialize results object
     };
 
     this.activeRounds.set(match.id, roundData);
@@ -248,16 +253,23 @@ class RoundManager {
 
     // End round when time is up
     if (roundData.timeRemaining <= 0) {
-      this.endRound(match, matchManager);
+      this.sendShowResults(match, roundData, matchManager);
     }
   }
 
   /**
    * Handle answer submission
    */
-  handleAnswerSubmission(match, playerId, answerData) {
+  handleAnswerSubmission(match, playerId, answerData, matchManager) {
     const roundData = this.activeRounds.get(match.id);
     if (!roundData) return;
+
+    // Start timer if this is the first answer submission
+    if (!roundData.timer && !roundData.timerStarted) {
+      console.log('🎯 First answer submitted - starting round timer');
+      roundData.timerStarted = true;
+      this.startRoundTimer(match, matchManager);
+    }
 
     const { questionId, answer, timeTaken } = answerData;
     
@@ -322,7 +334,7 @@ class RoundManager {
 
     if (allPlayersCompleted) {
       // Both players finished, end the round
-      this.endRound(match, matchManager);
+      this.sendShowResults(match, roundData, matchManager);
     } else {
       // One player finished, give the other player 15 seconds
       const remainingPlayer = match.players.find(player => 
@@ -342,71 +354,12 @@ class RoundManager {
 
         // Set final timeout
         setTimeout(() => {
-          this.endRound(match, matchManager);
+          this.sendShowResults(match, roundData, matchManager);
         }, 15000);
       }
     }
   }
 
-  /**
-   * End the current round
-   */
-  endRound(match, matchManager) {
-    const roundData = this.activeRounds.get(match.id);
-    if (!roundData) return;
-
-    // Clear timer
-    if (roundData.timer) {
-      clearInterval(roundData.timer);
-    }
-
-    // Calculate final scores and determine winner
-    const roundResult = this.calculateRoundResult(match, roundData);
-    
-    // Update player scores and rounds won
-    match.players.forEach(player => {
-      const playerResult = roundData.results[player.id];
-      if (playerResult) {
-        player.score += playerResult.totalScore;
-        if (roundResult.winnerId === player.id) {
-          player.roundsWon++;
-        }
-      }
-    });
-
-    // Store round result
-    match.rounds.push({
-      round: match.currentRound,
-      category: match.currentRoundData.category,
-      results: roundResult,
-      duration: Date.now() - roundData.startTime
-    });
-
-    // Send round result to players
-    matchManager.broadcastToMatch(match, {
-      type: SERVER_EVENTS.ROUND_RESULT,
-      data: roundResult,
-      timestamp: Date.now()
-    });
-
-    // Check if match is over
-    const maxRoundsWon = Math.max(...match.players.map(p => p.roundsWon));
-    if (maxRoundsWon >= GAME_CONFIG.ROUNDS_TO_WIN) {
-      // Match is over
-      setTimeout(() => {
-        const winner = match.players.find(p => p.roundsWon >= GAME_CONFIG.ROUNDS_TO_WIN);
-        matchManager.endMatch(match, winner.id);
-      }, GAME_CONFIG.ROUND_RESULT_DISPLAY_TIME);
-    } else {
-      // Continue to next round
-      setTimeout(() => {
-        this.startNextRound(match, matchManager);
-      }, GAME_CONFIG.ROUND_RESULT_DISPLAY_TIME);
-    }
-
-    // Clean up
-    this.activeRounds.delete(match.id);
-  }
 
   /**
    * Calculate round result
@@ -418,35 +371,45 @@ class RoundManager {
 
     // Calculate basic scores and find fastest player
     match.players.forEach(player => {
-      const playerResult = roundData.results[player.id];
+      const playerResult = roundData.results && roundData.results[player.id];
       if (playerResult) {
+        // New scoring: 100 points per correct answer
+        const baseScore = playerResult.correctAnswers * 100;
+        
         results[player.id] = {
-          score: playerResult.totalScore,
+          score: baseScore, // Will add bonus later
+          baseScore: baseScore,
           correctAnswers: playerResult.correctAnswers,
           totalTime: playerResult.totalTime,
-          answers: playerResult.answers
+          answers: playerResult.answers,
+          firstFinishBonus: 0,
+          finishedAt: playerResult.finishedAt
         };
 
-        // Find fastest player (by completion time)
-        if (playerResult.totalTime < fastestTime) {
-          fastestTime = playerResult.totalTime;
+        // Find fastest player (by finish timestamp)
+        if (playerResult.finishedAt && playerResult.finishedAt < fastestTime) {
+          fastestTime = playerResult.finishedAt;
           fastestPlayer = player.id;
         }
       } else {
         // Player didn't complete
         results[player.id] = {
           score: 0,
+          baseScore: 0,
           correctAnswers: 0,
           totalTime: GAME_CONFIG.TIME_PER_QUESTION,
-          answers: []
+          answers: [],
+          firstFinishBonus: 0,
+          finishedAt: null
         };
       }
     });
 
-    // Add bonus points to fastest player
+    // Add 50 bonus points to fastest player (if they got at least one correct answer)
     if (fastestPlayer && results[fastestPlayer].correctAnswers > 0) {
-      results[fastestPlayer].score += GAME_CONFIG.BONUS_POINTS_FASTEST;
-      results[fastestPlayer].fastestBonus = true;
+      results[fastestPlayer].firstFinishBonus = 50;
+      results[fastestPlayer].score += 50;
+      console.log(`🏁 Player ${fastestPlayer} gets 50 point first finish bonus`);
     }
 
     // Determine round winner
@@ -479,9 +442,12 @@ class RoundManager {
     match.currentRound++;
     match.players.forEach(player => {
       player.ready = false;
+      player.readyForNextRound = false; // Reset ready for next round flag
+      player.readyToViewResults = false; // Reset ready to view results flag
     });
 
-    // Generate new round
+    // Generate new round data for the next round
+    console.log(`🏁 Generating new round data for round ${match.currentRound}`);
     const roundData = this.generateRound();
     match.currentRoundData = roundData;
     match.roundStartTime = Date.now();
@@ -522,12 +488,252 @@ class RoundManager {
   }
 
   /**
+   * Handle when a player finishes the quiz
+   */
+  handlePlayerFinished(match, playerId, score, matchManager) {
+    console.log(`🏁 Player ${playerId} finished quiz with score ${score} in match ${match.id}`);
+    console.log(`🏁 Match players:`, match.players.map(p => ({ id: p.id, username: p.username })));
+    
+    let roundData = this.activeRounds.get(match.id);
+    if (!roundData) {
+      console.warn(`No active round found for match ${match.id} - creating new round data`);
+      // Create round data if it doesn't exist
+      roundData = {
+        matchId: match.id,
+        startTime: match.roundStartTime || Date.now(),
+        timeRemaining: 15000,
+        warningSent: false,
+        timer: null,
+        results: {},
+        finishedPlayers: new Set(),
+        opponentFinishedTimer: null
+      };
+      this.activeRounds.set(match.id, roundData);
+    }
+
+    // Mark player as finished
+    if (!roundData.finishedPlayers) {
+      roundData.finishedPlayers = new Set();
+    }
+    roundData.finishedPlayers.add(playerId);
+
+    // Store the player's score
+    if (!roundData.results) {
+      roundData.results = {};
+    }
+    roundData.results[playerId] = {
+      totalScore: score * 100, // 100 points per correct answer
+      correctAnswers: score,
+      totalTime: Date.now() - (match.roundStartTime || roundData.startTime),
+      finished: true,
+      finishedAt: Date.now(), // Track exact finish time for first finish bonus
+      answers: []
+    };
+
+    // Check if both players are finished
+    console.log(`🏁 Checking finished players: ${roundData.finishedPlayers.size}/${match.players.length}`);
+    if (roundData.finishedPlayers.size >= match.players.length) {
+      console.log(`🏁 All players finished - sending SHOW_RESULTS`);
+      this.sendShowResults(match, roundData, matchManager);
+    } else {
+      console.log(`🏁 Only one player finished - notifying opponent`);
+      // Notify the opponent that someone finished
+      this.notifyOpponentFinished(match, playerId, roundData, matchManager);
+    }
+  }
+
+  /**
+   * Notify opponent that someone finished and start 15-second timer
+   */
+  notifyOpponentFinished(match, finishedPlayerId, roundData, matchManager) {
+    // Clear any existing timer
+    if (roundData.opponentFinishedTimer) {
+      clearTimeout(roundData.opponentFinishedTimer);
+    }
+
+    // Find the opponent
+    const opponent = match.players.find(player => player.id !== finishedPlayerId);
+    if (opponent && opponent.socket && opponent.socket.readyState === 1) {
+      opponent.socket.send(JSON.stringify({
+        type: SERVER_EVENTS.OPPONENT_FINISHED,
+        data: {
+          playerId: finishedPlayerId,
+          timeRemaining: 15000 // 15 seconds
+        },
+        timestamp: Date.now()
+      }));
+    }
+
+    // Set a 15-second timeout to end the round if the opponent doesn't finish
+    roundData.opponentFinishedTimer = setTimeout(() => {
+      const currentRoundData = this.activeRounds.get(match.id);
+      if (currentRoundData && currentRoundData.finishedPlayers && currentRoundData.finishedPlayers.size < match.players.length) {
+        console.log(`🏁 15-second timeout reached for match ${match.id} - sending SHOW_RESULTS`);
+        this.sendShowResults(match, currentRoundData, matchManager);
+      } else {
+        console.log(`🏁 15-second timeout reached for match ${match.id} - but round already completed or cleaned up`);
+      }
+    }, 15000);
+  }
+
+  /**
+   * Send SHOW_RESULTS to both players
+   */
+  sendShowResults(match, roundData, matchManager) {
+    console.log(`🏁 Sending SHOW_RESULTS for match ${match.id}`);
+    
+    // Calculate round results
+    const roundResult = this.calculateRoundResult(match, roundData);
+    
+    // Update player scores and rounds won
+    match.players.forEach(player => {
+      const playerResult = roundData.results && roundData.results[player.id];
+      if (playerResult) {
+        player.score += playerResult.totalScore;
+        if (roundResult.winnerId === player.id) {
+          player.roundsWon++;
+        }
+      }
+    });
+
+    // Store round result
+    match.rounds.push({
+      round: match.currentRound,
+      category: match.currentRoundData.category,
+      results: roundResult,
+      duration: Date.now() - roundData.startTime
+    });
+
+    // Send SHOW_RESULTS to both players
+    let connectedPlayers = 0;
+    match.players.forEach(player => {
+      if (player.socket && player.socket.readyState === 1) {
+        console.log(`🏁 Sending SHOW_RESULTS to player ${player.id}`);
+        try {
+          player.socket.send(JSON.stringify({
+            type: SERVER_EVENTS.SHOW_RESULTS,
+            data: {
+              matchId: match.id,
+              roundResult: roundResult,
+              matchData: {
+                id: match.id,
+                players: match.players.map(p => ({
+                  id: p.id,
+                  username: p.username,
+                  avatar: p.avatar,
+                  score: p.score,
+                  roundsWon: p.roundsWon
+                })),
+                currentRound: match.currentRound,
+                maxRounds: match.maxRounds
+              }
+            },
+            timestamp: Date.now()
+          }));
+          connectedPlayers++;
+        } catch (error) {
+          console.error(`🏁 Error sending SHOW_RESULTS to player ${player.id}:`, error);
+        }
+      } else {
+        console.log(`🏁 Cannot send SHOW_RESULTS to player ${player.id} - socket not ready (state: ${player.socket?.readyState})`);
+      }
+    });
+    
+    // If no players are connected, clean up the match
+    if (connectedPlayers === 0) {
+      console.log(`🏁 No players connected for match ${match.id} - cleaning up`);
+      matchManager.activeMatches.delete(match.id);
+      this.cleanup(match.id);
+      return;
+    }
+
+    // Check if match is over
+    const maxRoundsWon = Math.max(...match.players.map(p => p.roundsWon));
+    if (maxRoundsWon >= GAME_CONFIG.ROUNDS_TO_WIN) {
+      // Match is over - send MATCH_END after delay
+      setTimeout(() => {
+        const winner = match.players.find(p => p.roundsWon >= GAME_CONFIG.ROUNDS_TO_WIN);
+        matchManager.endMatch(match, winner.id);
+      }, GAME_CONFIG.ROUND_RESULT_DISPLAY_TIME);
+    } else {
+      // Wait for players to be ready for next round instead of auto-starting
+      console.log(`🏁 Round ${match.currentRound} completed. Waiting for players to be ready for next round.`);
+      // Don't auto-start next round - wait for READY_FOR_NEXT_ROUND message
+    }
+
+    // Clean up timers and round data
+    if (roundData.opponentFinishedTimer) {
+      clearTimeout(roundData.opponentFinishedTimer);
+    }
+    if (roundData.timer) {
+      clearInterval(roundData.timer);
+    }
+    this.activeRounds.delete(match.id);
+  }
+
+  /**
+   * Handle when a player is ready to view results
+   */
+  handleReadyToViewResults(match, playerId, matchManager) {
+    console.log(`🏁 Player ${playerId} is ready to view results in match ${match.id}`);
+    
+    // Mark player as ready to view results
+    const player = match.players.find(p => p.id === playerId);
+    if (!player) return;
+    
+    player.readyToViewResults = true;
+    
+    // Check if both players are ready to view results
+    const allPlayersReady = match.players.every(p => p.readyToViewResults);
+    if (allPlayersReady) {
+      console.log(`🏁 Both players ready to view results - sending BOTH_PLAYERS_READY_FOR_RESULTS`);
+      // Send message to both players to show results with delay
+      matchManager.broadcastToMatch(match, {
+        type: 'BOTH_PLAYERS_READY_FOR_RESULTS',
+        data: {
+          delay: 2500 // 2.5 second delay before showing results
+        },
+        timestamp: Date.now()
+      });
+    } else {
+      console.log(`🏁 Waiting for other players to be ready to view results`);
+    }
+  }
+
+  /**
+   * Handle when a player is ready for the next round
+   */
+  handleReadyForNextRound(match, playerId, matchManager) {
+    console.log(`🏁 Player ${playerId} is ready for next round in match ${match.id}`);
+    
+    // Mark player as ready for next round
+    const player = match.players.find(p => p.id === playerId);
+    if (!player) return;
+    
+    player.readyForNextRound = true;
+    
+    // Check if both players are ready for next round
+    const allPlayersReady = match.players.every(p => p.readyForNextRound);
+    if (allPlayersReady) {
+      console.log(`🏁 Both players ready for next round - starting round ${match.currentRound + 1}`);
+      this.startNextRound(match, matchManager);
+    } else {
+      console.log(`🏁 Waiting for other players to be ready for next round`);
+    }
+  }
+
+  /**
    * Clean up round data
    */
   cleanup(matchId) {
     const roundData = this.activeRounds.get(matchId);
-    if (roundData && roundData.timer) {
-      clearInterval(roundData.timer);
+    if (roundData) {
+      if (roundData.timer) {
+        clearInterval(roundData.timer);
+      }
+      if (roundData.opponentFinishedTimer) {
+        clearTimeout(roundData.opponentFinishedTimer);
+      }
     }
     this.activeRounds.delete(matchId);
   }

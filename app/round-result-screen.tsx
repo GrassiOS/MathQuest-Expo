@@ -12,14 +12,22 @@ import { LayeredAvatar } from '@/components/LayeredAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { competitiveMascotAnimations } from '@/data/static/lotties';
-import { MatchData, RoundResult } from '@/hooks/useWebSocket';
+import { useWebSocket } from '@/hooks/useWebSocket';
 
 const { width, height } = Dimensions.get('window');
 
 export default function RoundResultScreen() {
   const params = useLocalSearchParams();
+  const userScore = parseInt(params.userScore as string) || 0;
+  const totalQuestions = parseInt(params.totalQuestions as string) || 0;
+  const categoryId = params.categoryId as string || 'suma';
+  const categoryName = params.categoryName as string || 'Suma';
+  const bgColor1 = params.bgColor1 as string || '#6FFF8C';
+  const bgColor2 = params.bgColor2 as string || '#00F715';
+  const roundNumber = parseInt(params.roundNumber as string) || 1;
   const roundResultParam = params.roundResult as string;
   const matchDataParam = params.matchData as string;
+  const waitingForOpponent = params.waitingForOpponent === 'true';
   
   const [fontsLoaded] = useFonts({
     Digitalt: require('../assets/fonts/Digitalt.otf'),
@@ -29,82 +37,215 @@ export default function RoundResultScreen() {
   const { user } = useAuth();
   const { avatar: userAvatar } = useAvatar();
   
-  // Parse data from params
-  const roundResult: RoundResult = JSON.parse(roundResultParam);
-  const matchData: MatchData = JSON.parse(matchDataParam);
+  // Parse round result data from server
+  const roundResult = roundResultParam ? JSON.parse(roundResultParam) : null;
+  const matchData = matchDataParam ? JSON.parse(matchDataParam) : null;
   
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [showMascot, setShowMascot] = useState(false);
+  // WebSocket connection for sending ready for next round
+  const { 
+    sendReadyForNextRound, 
+    sendReadyToViewResults,
+    isConnected,
+    bothPlayersReadyForResults,
+    resultsDelay
+  } = useWebSocket(
+    user?.id,
+    user?.username || 'Player',
+    userAvatar,
+    matchData // Pass matchData to WebSocket hook
+  );
+
+  // State for managing results display
+  const [showResults, setShowResults] = useState(false);
+  const [bothPlayersReady, setBothPlayersReady] = useState(false);
+  const [showScorePanel, setShowScorePanel] = useState(false);
+  const [showMascotAnimation, setShowMascotAnimation] = useState(false);
+  const [showContinueButton, setShowContinueButton] = useState(false);
+  const [hasClickedShowResults, setHasClickedShowResults] = useState(false);
+  const [userScoreAnimated, setUserScoreAnimated] = useState(0);
+  const [opponentScoreAnimated, setOpponentScoreAnimated] = useState(0);
   
+  // Get opponent data from match data
+  const getOpponent = () => {
+    if (!matchData || !user?.id) return null;
+    return matchData.players.find((player: any) => player.id !== user.id);
+  };
+  
+  const opponent = getOpponent();
+  
+  // Calculate scores and winner from server data
+  let opponentScore = 0;
+  let isWinner = false;
+  let mascotAsset = competitiveMascotAnimations.Plusito;
+  
+  if (roundResult && user?.id) {
+    // Get scores from server result
+    const userScoreData = roundResult.scores[user.id];
+    const opponentScoreData = roundResult.scores[opponent?.id];
+    
+    if (userScoreData && opponentScoreData) {
+      // Convert server scores (points) to correct answers count
+      opponentScore = Math.floor(opponentScoreData.score / 100); // 100 points per correct answer
+      isWinner = userScoreData.score > opponentScoreData.score;
+    }
+    
+    // Use mascot from server data
+    if (roundResult.mascotAsset) {
+      mascotAsset = competitiveMascotAnimations[roundResult.mascotAsset as keyof typeof competitiveMascotAnimations] || competitiveMascotAnimations.Plusito;
+    }
+  } else {
+    // Fallback to simulated data if no server data
+    opponentScore = Math.floor(Math.random() * totalQuestions);
+    isWinner = userScore > opponentScore;
+    mascotAsset = competitiveMascotAnimations[categoryId as keyof typeof competitiveMascotAnimations] || competitiveMascotAnimations.Plusito;
+  }
+
   // Animation refs
   const slideAnim = useRef(new Animated.Value(height)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const mascotScale = useRef(new Animated.Value(0)).current;
-  const scoreAnim = useRef(new Animated.Value(0)).current;
-
-  const currentPlayer = matchData.players.find(p => p.id === user?.id);
-  const opponent = matchData.players.find(p => p.id !== user?.id);
-  const isWinner = roundResult.winnerId === user?.id;
-  const userScore = roundResult.scores[user?.id || ''];
-  const opponentScore = roundResult.scores[opponent?.id || ''];
 
   useEffect(() => {
     // Initial animation
     Animated.parallel([
       Animated.spring(slideAnim, {
         toValue: 0,
+        useNativeDriver: true,
         tension: 50,
         friction: 8,
-        useNativeDriver: true,
       }),
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 500,
+        duration: 800,
         useNativeDriver: true,
       }),
     ]).start();
 
-    // Show confetti for winner
-    if (isWinner) {
+    // Don't automatically send ready to view results - wait for button click
+  }, [isConnected, waitingForOpponent, sendReadyToViewResults]);
+
+  // Handle both players ready for results
+  useEffect(() => {
+    if (bothPlayersReadyForResults && !waitingForOpponent) {
+      console.log('🎯 Both players ready for results, starting fade-in sequence');
+      setBothPlayersReady(true);
+      
+      // Start fade-in sequence after delay
       setTimeout(() => {
-        setShowConfetti(true);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      }, 1000);
+        setShowResults(true);
+        
+        // Show score panel first
+        setTimeout(() => {
+          setShowScorePanel(true);
+        }, 500);
+        
+        // Show mascot animation if winner
+        if (isWinner) {
+          setTimeout(() => {
+            setShowMascotAnimation(true);
+            setShowMascot(true);
+            Animated.spring(mascotScale, {
+              toValue: 1,
+              useNativeDriver: true,
+              tension: 50,
+              friction: 8,
+            }).start();
+          }, 1000);
+        }
+        
+        // Show continue button last
+        setTimeout(() => {
+          setShowContinueButton(true);
+        }, 1500);
+        
+      }, resultsDelay);
     }
+  }, [bothPlayersReadyForResults, waitingForOpponent, isWinner, resultsDelay]);
 
-    // Show mascot animation
-    setTimeout(() => {
-      setShowMascot(true);
-      Animated.spring(mascotScale, {
-        toValue: 1,
-        tension: 50,
-        friction: 8,
-        useNativeDriver: true,
-      }).start();
-    }, 1500);
+  // Handle countup animation for scores
+  useEffect(() => {
+    if (showScorePanel && roundResult && user?.id && opponent?.id) {
+      const userFinalScore = roundResult.scores[user.id]?.score || userScore * 100;
+      const opponentFinalScore = roundResult.scores[opponent.id]?.score || opponentScore * 100;
+      
+      // Animate user score
+      const userDuration = 2000; // 2 seconds
+      const userSteps = 60; // 60 steps for smooth animation
+      const userStepValue = userFinalScore / userSteps;
+      
+      let userStep = 0;
+      const userInterval = setInterval(() => {
+        userStep++;
+        setUserScoreAnimated(Math.min(userStep * userStepValue, userFinalScore));
+        
+        if (userStep >= userSteps) {
+          clearInterval(userInterval);
+          setUserScoreAnimated(userFinalScore);
+        }
+      }, userDuration / userSteps);
 
-    // Animate scores
-    setTimeout(() => {
-      Animated.timing(scoreAnim, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      }).start();
-    }, 2000);
+      // Animate opponent score (start slightly after user score)
+      setTimeout(() => {
+        const opponentDuration = 2000;
+        const opponentSteps = 60;
+        const opponentStepValue = opponentFinalScore / opponentSteps;
+        
+        let opponentStep = 0;
+        const opponentInterval = setInterval(() => {
+          opponentStep++;
+          setOpponentScoreAnimated(Math.min(opponentStep * opponentStepValue, opponentFinalScore));
+          
+          if (opponentStep >= opponentSteps) {
+            clearInterval(opponentInterval);
+            setOpponentScoreAnimated(opponentFinalScore);
+          }
+        }, opponentDuration / opponentSteps);
+      }, 500); // Start 0.5 seconds after user score
 
-    // Auto-advance after 5 seconds
-    const timer = setTimeout(() => {
-      // This will be handled by the WebSocket hook
-      // The next round will start automatically
-    }, 5000);
+      return () => {
+        clearInterval(userInterval);
+      };
+    }
+  }, [showScorePanel, roundResult, user?.id, opponent?.id]);
 
-    return () => clearTimeout(timer);
-  }, []);
+  const [showMascot, setShowMascot] = useState(false);
+
+  const handleShowResults = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    console.log('🎯 Show Results button clicked');
+    setHasClickedShowResults(true);
+    
+    // Send ready to view results message
+    if (isConnected) {
+      sendReadyToViewResults();
+    }
+  };
 
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // The game will continue automatically via WebSocket
-    router.back();
+    
+    console.log('🎯 Continue button pressed');
+    console.log('🎯 WebSocket connected:', isConnected);
+    console.log('🎯 Match data:', matchData);
+    console.log('🎯 User ID:', user?.id);
+    
+    // Check if match is over (based on rounds won)
+    const maxRoundsWon = Math.max(...matchData.players.map((p: any) => p.roundsWon || 0));
+    console.log('🎯 Max rounds won:', maxRoundsWon);
+    
+    if (maxRoundsWon >= 3) { // First to 3 wins
+      // Match is over, go back to main menu
+      console.log('🎯 Match is over, going back to main menu');
+      router.back();
+    } else {
+      // Send ready for next round message
+      console.log('🎯 Sending ready for next round');
+      sendReadyForNextRound();
+      // Navigate to online game screen for next round
+      console.log('🎯 Navigating to online game screen for next round');
+      router.push('/online-game-screen');
+    }
   };
 
   if (!fontsLoaded) {
@@ -118,57 +259,142 @@ export default function RoundResultScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[
-          roundResult.category.id === 'suma' ? '#6FFF8C' : 
-          roundResult.category.id === 'resta' ? '#537BFD' :
-          roundResult.category.id === 'multiplicacion' ? '#FF171B' :
-          roundResult.category.id === 'division' ? '#FFDD6F' : '#DF5ED0',
-          roundResult.category.id === 'suma' ? '#00F715' : 
-          roundResult.category.id === 'resta' ? '#7EE1FF' :
-          roundResult.category.id === 'multiplicacion' ? '#FF5659' :
-          roundResult.category.id === 'division' ? '#F2F700' : '#C71BED'
-        ]}
+        colors={[bgColor1, bgColor2]}
         style={styles.gradientBackground}
       />
 
-      {/* Confetti Animation */}
-      {showConfetti && (
-        <View style={styles.confettiContainer}>
-          <LottieView
-            source={require('../assets/lotties/extras/Confetti_quick.json')}
-            autoPlay
-            loop={false}
-            style={styles.confettiAnimation}
-          />
-        </View>
-      )}
-
-      <Animated.View style={[
-        styles.content,
-        {
-          transform: [{ translateY: slideAnim }],
-          opacity: fadeAnim
-        }
-      ]}>
-        <SafeAreaView style={styles.safeArea}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.headerTitle, { fontFamily: 'Digitalt' }]}>
-              {isWinner ? '¡VICTORIA!' : 'RONDA TERMINADA'}
-            </Text>
-            <Text style={[styles.headerSubtitle, { fontFamily: 'Gilroy-Black' }]}>
-              {roundResult.category.displayName}
+      <SafeAreaView style={styles.safeArea}>
+        <Animated.View style={[
+          styles.content,
+          {
+            transform: [{ translateY: slideAnim }],
+            opacity: fadeAnim
+          }
+        ]}>
+          {/* Round Indicator */}
+          <View style={styles.roundContainer}>
+            <Text style={[styles.roundText, { fontFamily: 'Digitalt' }]}>
+              RONDA {roundNumber}
             </Text>
           </View>
 
-          {/* Mascot Animation */}
-          {showMascot && (
+          {/* Player Section - Top */}
+          <View style={styles.topPlayerSection}>
+            <View style={styles.playerInfo}>
+              <View style={styles.avatarContainer}>
+                <LayeredAvatar 
+                  avatar={userAvatar}
+                  size={50}
+                  style={styles.avatar}
+                />
+              </View>
+              <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>
+                {user?.username || 'Player1'}
+              </Text>
+            </View>
+
+            <View style={styles.playerInfo}>
+              <View style={styles.avatarContainer}>
+                <LayeredAvatar 
+                  avatar={opponent?.avatar || userAvatar}
+                  size={50}
+                  style={styles.avatar}
+                />
+              </View>
+              <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>
+                {opponent?.username || 'Player2'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Score Panel or Waiting Message */}
+          {waitingForOpponent ? (
+            <View style={styles.waitingPanel}>
+              <View style={styles.waitingAnimation}>
+                <LottieView
+                  source={require('../assets/lotties/extras/lupa.json')}
+                  autoPlay
+                  loop
+                  style={styles.waitingLottie}
+                />
+              </View>
+              <Text style={[styles.waitingTitle, { fontFamily: 'Digitalt' }]}>
+                ESPERANDO OPONENTE
+              </Text>
+              <Text style={[styles.waitingSubtitle, { fontFamily: 'Digitalt' }]}>
+                Tu puntaje: {userScore}/{totalQuestions}
+              </Text>
+            </View>
+          ) : !hasClickedShowResults ? (
+            <View style={styles.showResultsContainer}>
+              <Text style={[styles.showResultsTitle, { fontFamily: 'Digitalt' }]}>
+                ¡Ambos jugadores terminaron!
+              </Text>
+              <TouchableOpacity
+                style={styles.showResultsButton}
+                onPress={handleShowResults}
+              >
+                <LinearGradient
+                  colors={['#FFD616', '#F65D00']}
+                  style={styles.showResultsButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Text style={[styles.showResultsButtonText, { fontFamily: 'Gilroy-Black' }]}>
+                    MOSTRAR RESULTADOS
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          ) : showScorePanel ? (
+            <Animated.View 
+              style={[
+                styles.scorePanel,
+                {
+                  opacity: showScorePanel ? 1 : 0,
+                  transform: [{ scale: showScorePanel ? 1 : 0.8 }]
+                }
+              ]}
+            >
+              <View style={styles.scoreSection}>
+                {isWinner && (
+                  <View style={styles.crownContainer}>
+                    <FontAwesome5 name="crown" size={24} color="#FFD700" />
+                  </View>
+                )}
+                <Text style={[styles.scoreLabel, { fontFamily: 'Digitalt' }]}>
+                  Puntaje
+                </Text>
+                <Text style={[styles.scoreValue, { fontFamily: 'Digitalt' }]}>
+                  {Math.floor(userScoreAnimated)}
+                </Text>
+              </View>
+
+              <View style={styles.scoreSection}>
+                <Text style={[styles.scoreLabel, { fontFamily: 'Digitalt' }]}>
+                  Puntaje
+                </Text>
+                <Text style={[styles.scoreValue, { fontFamily: 'Digitalt' }]}>
+                  {Math.floor(opponentScoreAnimated)}
+                </Text>
+              </View>
+            </Animated.View>
+          ) : null}
+
+          {/* Mascot - only show when showing results */}
+          {!waitingForOpponent && showMascotAnimation && showMascot && isWinner && (
             <Animated.View style={[
               styles.mascotContainer,
-              { transform: [{ scale: mascotScale }] }
+              { 
+                opacity: showMascotAnimation ? 1 : 0,
+                transform: [
+                  { scale: mascotScale },
+                  { translateY: showMascotAnimation ? 0 : 20 }
+                ]
+              }
             ]}>
               <LottieView
-                source={competitiveMascotAnimations[roundResult.mascotName as keyof typeof competitiveMascotAnimations]}
+                source={mascotAsset}
                 autoPlay
                 loop
                 style={styles.mascotAnimation}
@@ -176,150 +402,36 @@ export default function RoundResultScreen() {
             </Animated.View>
           )}
 
-          {/* Results */}
-          <View style={styles.resultsContainer}>
-            {/* Current Player */}
-            <View style={[
-              styles.playerResult,
-              isWinner && styles.winnerResult
-            ]}>
-              <View style={styles.playerInfo}>
-                <View style={styles.avatarContainer}>
-                  <LayeredAvatar 
-                    avatar={userAvatar}
-                    size={60}
-                    style={styles.avatar}
-                  />
-                  {isWinner && (
-                    <View style={styles.crownIcon}>
-                      <FontAwesome5 name="crown" size={20} color="#FFD700" />
-                    </View>
-                  )}
-                </View>
-                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>
-                  {currentPlayer?.username}
-                </Text>
-              </View>
-              
-              <Animated.View style={[
-                styles.scoreContainer,
-                { opacity: scoreAnim }
-              ]}>
-                <Text style={[styles.scoreLabel, { fontFamily: 'Gilroy-Black' }]}>
-                  PUNTOS
-                </Text>
-                <Text style={[styles.scoreValue, { fontFamily: 'Digitalt' }]}>
-                  {userScore?.score || 0}
-                </Text>
-                <Text style={[styles.correctAnswers, { fontFamily: 'Gilroy-Black' }]}>
-                  {userScore?.correctAnswers || 0}/6 correctas
-                </Text>
-                {userScore?.fastestBonus && (
-                  <View style={styles.bonusBadge}>
-                    <FontAwesome5 name="bolt" size={12} color="#fff" />
-                    <Text style={[styles.bonusText, { fontFamily: 'Digitalt' }]}>
-                      +50 RÁPIDO
-                    </Text>
-                  </View>
-                )}
-              </Animated.View>
-            </View>
-
-            {/* VS Divider */}
-            <View style={styles.vsSection}>
-              <View style={styles.vsLine} />
-              <View style={styles.vsCircle}>
-                <Text style={[styles.vsText, { fontFamily: 'Digitalt' }]}>VS</Text>
-              </View>
-              <View style={styles.vsLine} />
-            </View>
-
-            {/* Opponent */}
-            <View style={[
-              styles.playerResult,
-              !isWinner && styles.winnerResult
-            ]}>
-              <View style={styles.playerInfo}>
-                <View style={styles.avatarContainer}>
-                  <View style={styles.opponentAvatar}>
-                    <Text style={[styles.opponentAvatarText, { fontFamily: 'Digitalt' }]}>
-                      {opponent?.avatar?.skin_asset?.charAt(0) || 'O'}
-                    </Text>
-                  </View>
-                  {!isWinner && (
-                    <View style={styles.crownIcon}>
-                      <FontAwesome5 name="crown" size={20} color="#FFD700" />
-                    </View>
-                  )}
-                </View>
-                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>
-                  {opponent?.username}
-                </Text>
-              </View>
-              
-              <Animated.View style={[
-                styles.scoreContainer,
-                { opacity: scoreAnim }
-              ]}>
-                <Text style={[styles.scoreLabel, { fontFamily: 'Gilroy-Black' }]}>
-                  PUNTOS
-                </Text>
-                <Text style={[styles.scoreValue, { fontFamily: 'Digitalt' }]}>
-                  {opponentScore?.score || 0}
-                </Text>
-                <Text style={[styles.correctAnswers, { fontFamily: 'Gilroy-Black' }]}>
-                  {opponentScore?.correctAnswers || 0}/6 correctas
-                </Text>
-                {opponentScore?.fastestBonus && (
-                  <View style={styles.bonusBadge}>
-                    <FontAwesome5 name="bolt" size={12} color="#fff" />
-                    <Text style={[styles.bonusText, { fontFamily: 'Digitalt' }]}>
-                      +50 RÁPIDO
-                    </Text>
-                  </View>
-                )}
-              </Animated.View>
-            </View>
-          </View>
-
-          {/* Match Progress */}
-          <View style={styles.progressContainer}>
-            <Text style={[styles.progressTitle, { fontFamily: 'Digitalt' }]}>
-              PROGRESO DEL MATCH
-            </Text>
-            <View style={styles.progressBar}>
-              <View style={[
-                styles.progressFill,
-                { width: `${(matchData.currentRound / matchData.maxRounds) * 100}%` }
-              ]} />
-            </View>
-            <Text style={[styles.progressText, { fontFamily: 'Gilroy-Black' }]}>
-              Ronda {matchData.currentRound} de {matchData.maxRounds}
-            </Text>
-          </View>
-
-          {/* Continue Button */}
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity 
-              style={styles.continueButton}
-              onPress={handleContinue}
-              activeOpacity={0.8}
+          {/* Continue Button - only show when showing results */}
+          {!waitingForOpponent && showContinueButton && (
+            <Animated.View
+              style={{
+                opacity: showContinueButton ? 1 : 0,
+                transform: [
+                  { scale: showContinueButton ? 1 : 0.9 },
+                  { translateY: showContinueButton ? 0 : 10 }
+                ]
+              }}
             >
-              <LinearGradient
-                colors={['#22c55e', '#16a34a']}
-                style={styles.continueButtonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+              <TouchableOpacity
+                style={styles.continueButton}
+                onPress={handleContinue}
               >
-                <FontAwesome5 name="arrow-right" size={20} color="#fff" />
-                <Text style={[styles.continueButtonText, { fontFamily: 'Digitalt' }]}>
-                  CONTINUAR
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </Animated.View>
+                <LinearGradient
+                  colors={['#FFD616', '#F65D00']}
+                  style={styles.continueButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Text style={[styles.continueButtonText, { fontFamily: 'Gilroy-Black' }]}>
+                    Siguiente
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+        </Animated.View>
+      </SafeAreaView>
     </View>
   );
 }
@@ -340,220 +452,145 @@ const styles = StyleSheet.create({
     top: 0,
     height: height,
   },
-  content: {
-    flex: 1,
-  },
   safeArea: {
     flex: 1,
   },
-
-  // Confetti Styles
-  confettiContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
-    pointerEvents: 'none',
-  },
-  confettiAnimation: {
-    width: '100%',
-    height: '100%',
-  },
-
-  // Header Styles
-  header: {
-    alignItems: 'center',
-    paddingVertical: 30,
-    paddingHorizontal: 20,
-  },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 32,
-    fontWeight: 'bold',
-    letterSpacing: 2,
-    textAlign: 'center',
-    marginBottom: 10,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  headerSubtitle: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 18,
-    textAlign: 'center',
-  },
-
-  // Mascot Styles
-  mascotContainer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  mascotAnimation: {
-    width: 150,
-    height: 100,
-  },
-
-  // Results Styles
-  resultsContainer: {
+  content: {
     flex: 1,
     paddingHorizontal: 20,
-    justifyContent: 'center',
-  },
-  playerResult: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 20,
-    padding: 20,
-    marginVertical: 10,
+    paddingTop: 40,
     alignItems: 'center',
+    justifyContent: 'space-around',
   },
-  winnerResult: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderWidth: 2,
-    borderColor: '#FFD700',
-    elevation: 10,
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+  roundContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  roundText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+  },
+  topPlayerSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 20,
   },
   playerInfo: {
     alignItems: 'center',
-    marginBottom: 15,
   },
   avatarContainer: {
-    position: 'relative',
     marginBottom: 10,
   },
   avatar: {
-    borderRadius: 30,
-  },
-  opponentAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#dc2626',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#fff',
-  },
-  opponentAvatarText: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  crownIcon: {
-    position: 'absolute',
-    top: -10,
-    right: -10,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFD700',
+    borderRadius: 25,
   },
   playerName: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
-  scoreContainer: {
+  scorePanel: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 20,
+    padding: 30,
+    width: '90%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  scoreLabel: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 14,
-    marginBottom: 5,
+  scoreSection: {
+    alignItems: 'center',
+    flex: 1,
   },
-  scoreValue: {
-    color: '#fff',
-    fontSize: 36,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  correctAnswers: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 12,
+  crownContainer: {
     marginBottom: 10,
   },
-  bonusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f59e0b',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    gap: 4,
-  },
-  bonusText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-
-  // VS Section Styles
-  vsSection: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  vsLine: {
-    height: 2,
-    width: 80,
-    backgroundColor: '#fff',
-    marginVertical: 10,
-  },
-  vsCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  vsText: {
-    color: '#7c3aed',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-
-  // Progress Styles
-  progressContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  progressTitle: {
+  scoreLabel: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 15,
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 4,
     marginBottom: 10,
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#FFD700',
-    borderRadius: 4,
+  scoreValue: {
+    color: '#fff',
+    fontSize: 48,
+    fontWeight: 'bold',
   },
-  progressText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 14,
+  waitingPanel: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 20,
+    padding: 40,
+    width: '90%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  waitingAnimation: {
+    marginBottom: 20,
+  },
+  waitingLottie: {
+    width: 100,
+    height: 100,
+  },
+  waitingTitle: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+    letterSpacing: 2,
+  },
+  waitingSubtitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    opacity: 0.8,
+  },
+  showResultsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  showResultsTitle: {
+    fontSize: 24,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 30,
+    fontWeight: 'bold',
+  },
+  showResultsButton: {
+    borderRadius: 25,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  showResultsButtonGradient: {
+    paddingHorizontal: 40,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 200,
+  },
+  showResultsButtonText: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
     textAlign: 'center',
   },
-
-  // Button Styles
-  buttonContainer: {
-    paddingHorizontal: 40,
-    paddingBottom: 30,
+  mascotContainer: {
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  mascotAnimation: {
+    width: 150,
+    height: 150,
   },
   continueButton: {
     borderRadius: 30,
@@ -562,15 +599,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
+    marginBottom: 30,
   },
   continueButtonGradient: {
-    flexDirection: 'row',
+    paddingHorizontal: 60,
+    paddingVertical: 20,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 40,
-    borderRadius: 30,
-    gap: 12,
   },
   continueButtonText: {
     color: '#fff',

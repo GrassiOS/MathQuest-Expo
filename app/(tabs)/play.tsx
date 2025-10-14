@@ -43,7 +43,7 @@ export default function PlayScreen() {
       />
       <AnimatedMathBackground />
 
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
         {/* Top-right avatar + coins */}
         <View style={styles.topBar}>
           <View style={styles.avatarBlock}>

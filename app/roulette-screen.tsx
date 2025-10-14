@@ -1,3 +1,8 @@
+import { LayeredAvatar } from '@/components/LayeredAvatar';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAvatar } from '@/contexts/AvatarContext';
+import { useGame } from '@/contexts/GameContext';
+import { useWebSocket } from '@/hooks/useWebSocket';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import * as Haptics from 'expo-haptics';
@@ -6,12 +11,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-import { useGame } from '@/contexts/GameContext';
 import { categories } from '../data/static/categories';
-import { questions } from '../data/static/questions';
 import { Category } from '../types/Category';
-import { getRandomQuestionsByCategory } from '../utils/getRandomQuestions';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -42,45 +44,106 @@ export default function RouletteScreen() {
   const bgColor1 = params.bgColor1 as string || '#8b5cf6';
   const bgColor2 = params.bgColor2 as string || '#a855f7';
   const questionsParam = params.questions as string;
+  const matchId = params.matchId as string;
+  const matchDataParam = params.matchData as string;
+  
+  // Parse match data if available
+  const matchData = matchDataParam ? JSON.parse(matchDataParam) : null;
   
   const { gameState, setCategory, setQuestions } = useGame();
+  const { user } = useAuth();
+  const { avatar: userAvatar } = useAvatar();
+  
+  // Get opponent data from match data
+  const getOpponent = () => {
+    if (!matchData || !user?.id) return null;
+    
+    const opponent = matchData.players.find((player: any) => player.id !== user.id);
+    return opponent;
+  };
+  
+  const opponent = getOpponent();
+  
+  // WebSocket connection for online mode
+  const {
+    isConnected,
+    roundData,
+    sendPlayerReady,
+    sendMessage
+  } = useWebSocket(
+    user?.id,
+    user?.username || 'Player',
+    userAvatar
+  );
+  
   const [isSpinning, setIsSpinning] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  const [isOnlineMode, setIsOnlineMode] = useState(false);
+  const [isOnlineModeState, setIsOnlineModeState] = useState(false);
+  const [receivedCategory, setReceivedCategory] = useState<Category | null>(null);
+  const [receivedQuestions, setReceivedQuestions] = useState<any[]>([]);
+  const [isPlayerReady, setIsPlayerReady] = useState(false);
+  const [bothPlayersReady, setBothPlayersReady] = useState(false);
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const buttonScaleAnim = useRef(new Animated.Value(1)).current;
 
-  // Check if we're in online mode and auto-spin to predetermined category
+  // Check if we're in online mode and wait for both players to be ready
   useEffect(() => {
     console.log('🎰 Roulette screen useEffect triggered');
     console.log('🎰 categoryId:', categoryId);
     console.log('🎰 questionsParam:', questionsParam ? 'Present' : 'Missing');
+    console.log('🎰 matchId:', matchId);
+    console.log('🎰 matchData:', matchData ? 'Present' : 'Missing');
     
-    if (categoryId && questionsParam) {
-      console.log('🎰 Setting online mode and auto-spinning');
-      setIsOnlineMode(true);
-      const targetCategory = categories[categoryId];
-      if (targetCategory) {
-        console.log('🎰 Target category found:', targetCategory.displayName);
-        // Auto-spin to the predetermined category after a short delay
-        setTimeout(() => {
-          console.log('🎰 Starting auto-spin to category');
-          spinToCategory(targetCategory);
-        }, 1000);
-      } else {
-        console.error('🎰 Category not found for ID:', categoryId);
-      }
-    } else {
-      console.log('🎰 Offline mode - no auto-spin');
-    }
+    console.log('🎰 Online mode - waiting for both players to be ready');
+    setIsOnlineModeState(true);
+    // Don't auto-spin yet, wait for both players to click "LISTO"
   }, [categoryId, questionsParam]);
 
-  const spinToCategory = (targetCategory: Category) => {
+  // Handle WebSocket ROUND_CATEGORY event (when server sends category and questions)
+  useEffect(() => {
+    if (roundData && !bothPlayersReady) {
+      console.log('🎰 Received ROUND_CATEGORY from server:', roundData);
+      
+      // Ensure category has all required properties
+      const serverCategory = roundData.category;
+      const fullCategory: Category = {
+        id: serverCategory.id,
+        displayName: serverCategory.displayName,
+        mascotName: serverCategory.mascotName,
+        bgColor1: categories[serverCategory.id]?.bgColor1 || '#8b5cf6',
+        bgColor2: categories[serverCategory.id]?.bgColor2 || '#a855f7'
+      };
+      
+      setReceivedCategory(fullCategory);
+      setReceivedQuestions(roundData.questions);
+      setBothPlayersReady(true);
+      
+      console.log('🎰 Set receivedQuestions:', roundData.questions.length, 'questions');
+      console.log('🎰 First question:', roundData.questions[0]);
+      
+      // Auto-spin to the category received from server
+      setTimeout(() => {
+        console.log('🎰 Starting auto-spin to server category');
+        spinToCategory(fullCategory, roundData.questions);
+      }, 2500);
+    }
+  }, [roundData, bothPlayersReady]);
+
+  const spinToCategory = (targetCategory: Category, questionsToUse?: any[]) => {
     console.log('🎰 spinToCategory called for:', targetCategory.displayName);
     console.log('🎰 isSpinning:', isSpinning);
+    console.log('🎰 receivedQuestions length:', receivedQuestions.length);
+    console.log('🎰 questionsToUse length:', questionsToUse?.length || 0);
     
     if (isSpinning) {
       console.log('🎰 Already spinning, returning');
+      return;
+    }
+    
+    // Use passed questions or fallback to state
+    const questions = questionsToUse || receivedQuestions;
+    if (questions.length === 0) {
+      console.log('🎰 No questions available, cannot spin');
       return;
     }
 
@@ -110,33 +173,78 @@ export default function RouletteScreen() {
       // Set up the game with the selected category and questions
       setCategory(targetCategory);
       
-      if (isOnlineMode && questionsParam) {
-        console.log('🎰 Using online mode questions');
-        // Use questions from WebSocket for online mode
+      if (receivedQuestions.length > 0) {
+        console.log('🎰 Using questions from server');
+        setQuestions(receivedQuestions);
+      } else if (questionsParam) {
+        console.log('🎰 Using questions from params');
         const parsedQuestions = JSON.parse(questionsParam);
         setQuestions(parsedQuestions);
-      } else {
-        console.log('🎰 Using offline mode questions');
-        // Generate random questions for offline mode
-        const categoryQuestions = getRandomQuestionsByCategory(targetCategory.id, questions);
-        setQuestions(categoryQuestions);
       }
 
       // Navigate to quiz screen after delay
       console.log('🎰 Setting up navigation to quiz screen in 2 seconds');
       setTimeout(() => {
         console.log('🎰 Navigating to quiz screen');
+        const questionsToPass = questions.length > 0 
+          ? questions 
+          : receivedQuestions.length > 0 
+          ? receivedQuestions 
+          : questionsParam 
+          ? JSON.parse(questionsParam)
+          : [];
+
+        console.log('🎰 Roulette - questionsToPass length:', questionsToPass.length);
+        console.log('🎰 Roulette - receivedQuestions length:', receivedQuestions.length);
+        console.log('🎰 Roulette - receivedQuestions content:', receivedQuestions);
+        console.log('🎰 Roulette - questionsParam:', questionsParam ? 'Present' : 'Missing');
+
         router.push({
           pathname: '/quiz-screen',
           params: {
             categoryId: targetCategory.id,
-            bgColor1,
-            bgColor2,
-            questions: JSON.stringify(isOnlineMode && questionsParam ? JSON.parse(questionsParam) : getRandomQuestionsByCategory(targetCategory.id, questions))
+            bgColor1: targetCategory.bgColor1,
+            bgColor2: targetCategory.bgColor2,
+            questions: JSON.stringify(questionsToPass),
+            matchId: matchId || '',
+            matchData: matchData ? JSON.stringify(matchData) : ''
           }
         });
       }, 2000);
     });
+  };
+
+  const handleListoPress = () => {
+    if (isSpinning || isPlayerReady) return;
+
+    console.log('🎰 LISTO button pressed - sending PLAYER_READY');
+    setIsPlayerReady(true);
+    
+    // Button animation
+    Animated.sequence([
+      Animated.timing(buttonScaleAnim, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonScaleAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Send player ready message to server
+    if (sendMessage && matchData) {
+      console.log('🎰 Sending PLAYER_READY with matchData:', matchData);
+      sendMessage('PLAYER_READY', {
+        matchId: matchData.matchId,
+        playerId: user?.id
+      });
+    } else if (sendPlayerReady) {
+      console.log('🎰 Using sendPlayerReady fallback');
+      sendPlayerReady();
+    }
   };
 
   const spinRoulette = () => {
@@ -176,48 +284,57 @@ export default function RouletteScreen() {
     outputRange: ['0deg', '360deg'],
   });
 
-    return (
-      <View style={styles.container}>
-        <LinearGradient
-          colors={[bgColor1, bgColor2]}
-          style={styles.gradientBackground}
-        />
-      
+   return (
+    <View style={styles.container}>
+      <LinearGradient colors={[bgColor1, bgColor2]} style={styles.gradientBackground} />
+    {/* SafeArea wrapper for all visible content */}
+    <SafeAreaView style={{ flex: 1 }}>
       {/* Competitive Header */}
-      <SafeAreaView style={styles.headerContainer}>
+      <View style={styles.headerContainer}>
         <View style={styles.competitiveHeader}>
+          {/* Player 1 */}
           <View style={styles.playerSection}>
             <View style={styles.playerRow}>
-              <Text style={styles.avatarEmoji}>{USER_1.avatar}</Text>
+              <View style={styles.avatarEmojiContainer}>
+                <LayeredAvatar avatar={userAvatar} size={35} />
+              </View>
               <View style={styles.playerInfo}>
-                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>{USER_1.name}</Text>
-                <Text style={[styles.playerScore, { fontFamily: 'Digitalt' }]}>{USER_1.score.toString().padStart(2, '0')}</Text>
+                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>
+                  {user?.username || USER_1.name}
+                </Text>
+                <Text style={[styles.playerScore, { fontFamily: 'Digitalt' }]}>
+                  {USER_1.score.toString().padStart(2, '0')}
+                </Text>
               </View>
             </View>
           </View>
-          
+
+          {/* Player 2 */}
           <View style={styles.playerSection}>
             <View style={styles.playerRow}>
-              <Text style={styles.avatarEmoji}>{USER_2.avatar}</Text>
+              <View style={styles.avatarEmojiContainer}>
+                <LayeredAvatar avatar={opponent?.avatar || userAvatar} size={35} />
+              </View>
               <View style={styles.playerInfo}>
-                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>{USER_2.name}</Text>
-                <Text style={[styles.playerScore, { fontFamily: 'Digitalt' }]}>{USER_2.score.toString().padStart(2, '0')}</Text>
+                <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>
+                  {opponent?.username || USER_2.name}
+                </Text>
+                <Text style={[styles.playerScore, { fontFamily: 'Digitalt' }]}>
+                  {USER_2.score.toString().padStart(2, '0')}
+                </Text>
               </View>
             </View>
           </View>
         </View>
-      </SafeAreaView>
+      </View>
 
       {/* Main Content */}
       <View style={styles.mainContent}>
-
         {/* Roulette Container */}
         <View style={styles.rouletteContainer}>
-          {/* Roulette Wheel */}
-          <Animated.View style={[
-            styles.rouletteWheel,
-            { transform: [{ rotate: spin }] }
-          ]}>
+          <Animated.View
+            style={[styles.rouletteWheel, { transform: [{ rotate: spin }] }]}
+          >
             <Image
               source={require('../assets/images/competitive/1v1_roulette.png')}
               style={styles.rouletteImage}
@@ -225,7 +342,7 @@ export default function RouletteScreen() {
             />
           </Animated.View>
 
-          {/* Center Circle with Lightbulb */}
+          {/* Center Circle */}
           <View style={styles.centerCircle}>
             <FontAwesome5 name="lightbulb" size={20} color="#000" />
           </View>
@@ -236,42 +353,49 @@ export default function RouletteScreen() {
           </View>
         </View>
 
-        {/* Selected Category Display */}
+        {/* Selected Category */}
         {selectedCategory && (
-          <View style={[
-            styles.selectedCategoryContainer,
-            { backgroundColor: selectedCategory.bgColor1 }
-          ]}>
+          <View
+            style={[
+              styles.selectedCategoryContainer,
+              { backgroundColor: selectedCategory.bgColor1 },
+            ]}
+          >
             <Text style={[styles.selectedCategoryText, { fontFamily: 'Digitalt' }]}>
               ¡{selectedCategory.displayName.toUpperCase()}!
             </Text>
           </View>
         )}
 
-        {/* Spin Button - Only show in offline mode */}
-        {!isOnlineMode && (
-          <Animated.View style={{ transform: [{ scale: buttonScaleAnim }] }}>
-            <TouchableOpacity
-              onPress={spinRoulette}
-              disabled={isSpinning}
-              style={styles.spinButtonContainer}
+        {/* Spin Button */}
+        <Animated.View style={{ transform: [{ scale: buttonScaleAnim }] }}>
+          <TouchableOpacity
+            onPress={handleListoPress}
+            disabled={isSpinning || isPlayerReady}
+            style={styles.spinButtonContainer}
+          >
+            <LinearGradient
+              colors={
+                isSpinning
+                  ? ['#999', '#666']
+                  : isPlayerReady
+                  ? ['#4CAF50', '#45a049']
+                  : ['#FFD616', '#F65D00']
+              }
+              style={styles.spinButton}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
             >
-              <LinearGradient
-                colors={isSpinning ? ['#999', '#666'] : ['#FFD616', '#F65D00']}
-                style={styles.spinButton}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <Text style={[styles.spinButtonText, { fontFamily: 'Gilroy-Black' }]}>
-                  {isSpinning ? 'Girando...' : 'Listo?'}
-                </Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
+              <Text style={[styles.spinButtonText, { fontFamily: 'Gilroy-Black' }]}>
+                {isSpinning ? 'Girando...' : isPlayerReady ? '¡Listo!' : 'LISTO'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
       </View>
-    </View>
-  );
+    </SafeAreaView>
+  </View>
+);
 }
 
 const styles = StyleSheet.create({
@@ -291,17 +415,17 @@ const styles = StyleSheet.create({
     height: height,
   },
   headerContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
+    paddingHorizontal: 20,
+    paddingTop: 0,
+  },
+  safeAreaHeader: {
+    backgroundColor: 'transparent',
   },
   competitiveHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    paddingTop: 10,
+    paddingTop: 20,
     paddingHorizontal: 30,
   },
   playerSection: {
@@ -324,6 +448,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 40,
   },
+  avatarEmojiContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
   playerName: {
     color: '#fff',
     fontSize: 12,
@@ -339,7 +472,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     alignItems: 'center',
-    paddingTop: 140,
+    paddingTop: 120, // Reduced to move content up
     justifyContent: 'space-around',
   },
   title: {

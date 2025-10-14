@@ -8,6 +8,8 @@ interface AuthContextType {
   signIn: (data: SignInData) => Promise<{ user: AuthUser | null; error: any }>;
   signOut: () => Promise<{ error: any }>;
   resetPassword: (email: string) => Promise<{ error: any }>;
+  refreshSession: () => Promise<{ user: AuthUser | null; error: any }>;
+  clearAuthData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,13 +23,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial user
+    // Get initial user with improved session handling
     const getInitialUser = async () => {
       try {
-        const currentUser = await AuthService.getCurrentUser();
-        setUser(currentUser);
+        // Check if there's a valid session first
+        const hasSession = await AuthService.hasValidSession();
+        
+        if (hasSession) {
+          const currentUser = await AuthService.getCurrentUser();
+          setUser(currentUser);
+        } else {
+          setUser(null);
+        }
       } catch (error) {
         console.error('Error getting initial user:', error);
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -94,6 +104,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const refreshSession = async () => {
+    try {
+      setLoading(true);
+      const result = await AuthService.refreshSession();
+      if (result.user) {
+        setUser(result.user);
+      }
+      return result;
+    } catch (error) {
+      return { user: null, error };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const clearAuthData = async () => {
+    try {
+      setLoading(true);
+      await AuthService.clearAuthData();
+      setUser(null);
+    } catch (error) {
+      console.error('Error clearing auth data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const value: AuthContextType = {
     user,
     loading,
@@ -101,6 +138,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signIn,
     signOut,
     resetPassword,
+    refreshSession,
+    clearAuthData,
   };
 
   return (

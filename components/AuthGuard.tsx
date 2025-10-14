@@ -20,13 +20,13 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   useEffect(() => {
     if (loading || !fontsLoaded) return;
 
-    const inAuthGroup = segments[0] === '(tabs)' || segments[0] === 'matchmaking-screen' || segments[0] === 'roulette-screen' || segments[0] === 'quiz-screen' || segments[0] === 'avatar-customization-screen' || segments[0] === 'game-results-screen' || segments[0] === 'online-game' || segments[0] === 'infinite-game';
+    const inAuthGroup = segments[0] === '(tabs)' || segments[0] === 'matchmaking-screen' || segments[0] === 'roulette-screen' || segments[0] === 'quiz-screen' || segments[0] === 'avatar-customization-screen' || segments[0] === 'game-results-screen' || segments[0] === 'online-game' || segments[0] === 'infinite-game' || segments[0] === 'lobby-screen' || segments[0] === 'online-game-screen' || segments[0] === 'round-result-screen' || segments[0] === 'match-end-screen';
 
     if (!user && inAuthGroup) {
       // User is not authenticated but trying to access protected route
       router.replace('/login' as any);
-    } else if (user && !inAuthGroup) {
-      // User is authenticated but on auth screen
+    } else if (user && !inAuthGroup && segments[0] !== 'login' && segments[0] !== 'signup' && segments[0] !== 'forgot-password') {
+      // User is authenticated but on auth screen (except for auth pages)
       router.replace('/(tabs)' as any);
     }
   }, [user, loading, segments, fontsLoaded]);

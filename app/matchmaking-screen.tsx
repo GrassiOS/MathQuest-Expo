@@ -190,9 +190,15 @@ export default function MatchmakingScreen() {
         ]).start(() => {
           console.log('✅ Found state animations complete');
           
-          // Navigate to lobby screen after animation
+          // Navigate to roulette screen after animation - server will provide category
           setTimeout(() => {
-            router.push('/lobby-screen');
+            router.push({
+              pathname: '/roulette-screen',
+              params: {
+                matchId: matchData.matchId,
+                matchData: JSON.stringify(matchData)
+              }
+            });
           }, 2000);
         });
       }, 600);
@@ -283,7 +289,7 @@ export default function MatchmakingScreen() {
         }, 600);
       }, Math.random() * 2000 + 3000); // 3-5 seconds (shortened for testing)
 
-      timeouts.push(searchTimeout);
+      timeouts.push(searchTimeout as unknown as NodeJS.Timeout);
     }
 
     return () => {
@@ -350,10 +356,7 @@ export default function MatchmakingScreen() {
         }),
       ]).start(() => {
         console.log('✅ Step 3 Complete: Screen peeled away');
-        console.log('🎯 Navigating to roulette screen');
-        
-        // Transition complete - navigate to online game screen
-        router.push('/online-game-screen');
+        // Navigation is already handled in the WebSocket match found effect
       });
     });
   };

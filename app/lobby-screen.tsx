@@ -76,6 +76,7 @@ export default function LobbyScreen() {
 
   // Handle ready button press
   const handleReadyPress = () => {
+    console.log('🎮 Ready button pressed!');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
     Animated.sequence([
@@ -93,6 +94,11 @@ export default function LobbyScreen() {
 
     sendPlayerReady();
   };
+
+  // Debug matchData changes
+  useEffect(() => {
+    console.log('🎯 Lobby screen - matchData changed:', matchData);
+  }, [matchData]);
 
   // Handle WebSocket events for game progression
   useEffect(() => {

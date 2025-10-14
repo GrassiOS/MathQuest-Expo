@@ -94,7 +94,7 @@ class MathQuestServer {
   handleClientMessage(ws, message) {
     const { type, data } = message;
     
-    console.log(`Received message: ${type}`, data);
+    console.log(`📨 Received message: ${type}`, data);
 
     switch (type) {
       case CLIENT_EVENTS.JOIN_QUEUE:
@@ -102,11 +102,27 @@ class MathQuestServer {
         break;
       
       case CLIENT_EVENTS.PLAYER_READY:
+        console.log('🎮 Server received PLAYER_READY message');
         this.handlePlayerReady(ws, data);
         break;
       
       case CLIENT_EVENTS.SUBMIT_ANSWER:
         this.handleSubmitAnswer(ws, data);
+        break;
+      
+      case CLIENT_EVENTS.FINISHED_QUIZ:
+        console.log('🏁 Server received FINISHED_QUIZ message');
+        this.handleFinishedQuiz(ws, data);
+        break;
+      
+      case CLIENT_EVENTS.READY_FOR_NEXT_ROUND:
+        console.log('🏁 Server received READY_FOR_NEXT_ROUND message');
+        this.handleReadyForNextRound(ws, data);
+        break;
+      
+      case CLIENT_EVENTS.READY_TO_VIEW_RESULTS:
+        console.log('🏁 Server received READY_TO_VIEW_RESULTS message');
+        this.handleReadyToViewResults(ws, data);
         break;
       
       case CLIENT_EVENTS.RECONNECT:
@@ -180,7 +196,94 @@ class MathQuestServer {
       questionId,
       answer,
       timeTaken: timeTaken || 0
-    });
+    }, this.matchManager);
+  }
+
+  handleFinishedQuiz(ws, data) {
+    const { matchId, playerId, score } = data;
+    
+    console.log(`🏁 Server received FINISHED_QUIZ:`, data);
+    
+    if (!matchId || !playerId || score === undefined) {
+      console.error(`🏁 Missing required fields: matchId=${matchId}, playerId=${playerId}, score=${score}`);
+      this.sendError(ws, 'Missing required fields: matchId, playerId, score');
+      return;
+    }
+
+    const match = this.matchManager.getMatch(matchId);
+    if (!match) {
+      console.error(`🏁 Match ${matchId} not found`);
+      this.sendError(ws, 'Match not found');
+      return;
+    }
+
+    // Verify player is in this match
+    const player = match.players.find(p => p.id === playerId);
+    if (!player) {
+      console.error(`🏁 Player ${playerId} not found in match ${matchId}`);
+      this.sendError(ws, 'Player not found in match');
+      return;
+    }
+
+    console.log(`🏁 Calling handlePlayerFinished for player ${playerId} with score ${score}`);
+    // Delegate to round manager to handle the finished quiz
+    this.matchManager.roundManager.handlePlayerFinished(match, playerId, score, this.matchManager);
+  }
+
+  handleReadyForNextRound(ws, data) {
+    const { matchId, playerId } = data;
+    
+    if (!matchId || !playerId) {
+      this.sendError(ws, 'Missing required fields: matchId, playerId');
+      return;
+    }
+
+    const match = this.matchManager.getMatch(matchId);
+    if (!match) {
+      console.error(`🏁 Match ${matchId} not found`);
+      this.sendError(ws, 'Match not found');
+      return;
+    }
+
+    // Verify player is in this match
+    const player = match.players.find(p => p.id === playerId);
+    if (!player) {
+      console.error(`🏁 Player ${playerId} not found in match ${matchId}`);
+      this.sendError(ws, 'Player not found in match');
+      return;
+    }
+
+    console.log(`🏁 Player ${playerId} is ready for next round in match ${matchId}`);
+    // Delegate to round manager to handle ready for next round
+    this.matchManager.roundManager.handleReadyForNextRound(match, playerId, this.matchManager);
+  }
+
+  handleReadyToViewResults(ws, data) {
+    const { matchId, playerId } = data;
+    
+    if (!matchId || !playerId) {
+      this.sendError(ws, 'Missing required fields: matchId, playerId');
+      return;
+    }
+
+    const match = this.matchManager.getMatch(matchId);
+    if (!match) {
+      console.error(`🏁 Match ${matchId} not found`);
+      this.sendError(ws, 'Match not found');
+      return;
+    }
+
+    // Verify player is in this match
+    const player = match.players.find(p => p.id === playerId);
+    if (!player) {
+      console.error(`🏁 Player ${playerId} not found in match ${matchId}`);
+      this.sendError(ws, 'Player not found in match');
+      return;
+    }
+
+    console.log(`🏁 Player ${playerId} is ready to view results in match ${matchId}`);
+    // Delegate to round manager to handle ready to view results
+    this.matchManager.roundManager.handleReadyToViewResults(match, playerId, this.matchManager);
   }
 
   handleReconnect(ws, data) {

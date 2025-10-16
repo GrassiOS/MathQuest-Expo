@@ -116,8 +116,8 @@ export interface WebSocketState {
   resultsDelay: number;
 }
 
-//const WEBSOCKET_URL = 'ws://192.168.1.215:8080'; // Change this to your server URL
-const WEBSOCKET_URL = 'ws://10.41.87.53:8080'; // Change this to your server URL
+const WEBSOCKET_URL = 'ws://192.168.1.214:8080'; // Change this to your server URL
+//const WEBSOCKET_URL = 'ws://10.41.87.53:8080'; // Change this to your server URL
 const RECONNECT_INTERVAL = 3000;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
@@ -179,6 +179,12 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any,
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
           console.log('📨 Raw WebSocket message received:', message.type, message.data);
+          
+          // Log all messages to debug
+          if (message.type === 'SHOW_RESULTS') {
+            console.log('🎯 SHOW_RESULTS message received in onmessage handler');
+          }
+          
           handleMessage(message);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -266,14 +272,19 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any,
       console.log('Sending message:', message);
       wsRef.current.send(JSON.stringify(message));
     } else {
-      console.warn('WebSocket is not connected');
+      console.warn('WebSocket is not connected, readyState:', wsRef.current?.readyState);
     }
   }, []);
 
   const handleMessage = useCallback((message: WebSocketMessage) => {
-    // Only log important messages
+    // Log all important messages
     if (message.type === 'SHOW_RESULTS' || message.type === 'OPPONENT_FINISHED' || message.type === 'ERROR' || message.type === 'ROUND_CATEGORY') {
       console.log('📨 Received:', message.type, message.data);
+    }
+    
+    // Always log SHOW_RESULTS for debugging
+    if (message.type === 'SHOW_RESULTS') {
+      console.log('🎯 SHOW_RESULTS received in handleMessage:', message.data);
     }
 
     switch (message.type) {
@@ -366,7 +377,7 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any,
           opponentFinished: false,
           showOpponentFinishAnimation: false
         }));
-        //console.log('🎯 State updated with roundResult');
+        console.log('🎯 State updated with roundResult and showResults set to true');
         break;
 
       case WEBSOCKET_EVENTS.BOTH_PLAYERS_READY_FOR_RESULTS:
@@ -374,7 +385,14 @@ export const useWebSocket = (playerId?: string, username?: string, avatar?: any,
         setState(prev => ({
           ...prev,
           bothPlayersReadyForResults: true,
-          resultsDelay: message.data.delay || 2500
+          resultsDelay: message.data?.delay || 2500,
+          // If server includes roundResult in this event, adopt it immediately
+          roundResult: message.data?.roundResult ?? prev.roundResult,
+          matchData: message.data?.matchData ?? prev.matchData,
+          showResults: Boolean(message.data?.roundResult) || prev.showResults,
+          timeRemaining: 0,
+          opponentFinished: false,
+          showOpponentFinishAnimation: false
         }));
         break;
 

@@ -64,6 +64,7 @@ export default function PlayScreen() {
 
         {/* Game mode buttons */}
         <View style={styles.buttonsWrap}>
+          {/*
           <GameModeButton
             name="ONLINE!"
             route="/online-game"
@@ -78,6 +79,7 @@ export default function PlayScreen() {
             imagePath={require('../../assets/images/competitive/1v1_roulette.png')}
             onPress={() => router.push('/infinite-game')}
           />
+          */}
           <GameModeButton
             name="INFINITO!"
             route="/infinite-game"

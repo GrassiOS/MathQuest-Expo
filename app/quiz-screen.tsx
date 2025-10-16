@@ -2,7 +2,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import DrawPad, { DrawPadHandle } from "expo-drawpad";
 import { useFonts } from 'expo-font';
 import * as Haptics from 'expo-haptics';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import LottieView from 'lottie-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -40,6 +40,8 @@ const NUMPAD = [
 
 const { width, height } = Dimensions.get('window');
 
+// Quiz UI state management
+
 export default function QuizScreen() {
   const params = useLocalSearchParams();
   const categoryId = params.categoryId as string || 'resta';
@@ -68,30 +70,30 @@ export default function QuizScreen() {
   
   const opponent = getOpponent();
   
-  // WebSocket connection for online mode
-  const {
-    sendMessage,
-    sendFinishedQuiz,
-    opponentFinished,
-    showOpponentFinishAnimation,
-    timeRemaining: wsTimeRemaining,
-    roundResult,
-    showResults,
-    matchData: wsMatchData
-  } = useWebSocket(
+  // WebSocket integration for 1v1 round results
+  const { sendFinishedQuiz, sendReadyToViewResults, roundResult, showResults, matchData: liveMatchData, opponentFinished, timeRemaining: wsTimeRemaining } = useWebSocket(
     user?.id,
-    user?.username || 'Player',
+    user?.username,
     userAvatar,
-    matchData // Pass matchData to WebSocket hook
+    matchData
   );
-  
-  // Use matchData from WebSocket if available, otherwise use params
-  const effectiveMatchData = wsMatchData || matchData;
+
+  // When server sends results for the round, reveal result screen
+  useEffect(() => {
+    if (showResults && roundResult) {
+      setIsFinished(true);
+    }
+  }, [showResults, roundResult]);
+
+
+  // Use matchData from params
+  const effectiveMatchData = matchData;
   
   // Parse questions from params
   const questions: Question[] = questionsParam ? JSON.parse(questionsParam) : [];
   
-  // State management
+
+  // Game state management
   const [input, setInput] = useState('');
   const [showDrawPad, setShowDrawPad] = useState(false);
   const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
@@ -100,6 +102,25 @@ export default function QuizScreen() {
   const [userScore, setUserScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(15);
+  // After finishing, wait 1s and then request results from server if not received yet
+  const hasRequestedResultsRef = useRef(false);
+  useEffect(() => {
+    if (isFinished && !roundResult && !hasRequestedResultsRef.current) {
+      hasRequestedResultsRef.current = true;
+      const t = setTimeout(() => {
+        try {
+          sendReadyToViewResults();
+        } catch (_) {}
+      }, 1000);
+      return () => clearTimeout(t);
+    }
+
+    if (roundResult) {
+      hasRequestedResultsRef.current = false;
+    }
+  }, [isFinished, roundResult, sendReadyToViewResults]);
+
+
   
   const drawPadRef = useRef<DrawPadHandle>(null);
   const currentQuestion = questions[currentQuestionIndex] || null;
@@ -112,78 +133,13 @@ export default function QuizScreen() {
   const slideAnim = useRef(new Animated.Value(height)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
 
-  // Handle opponent finish animation and countdown
-  useEffect(() => {
-    if (showOpponentFinishAnimation) {
-      // Show animation for 4 seconds, then start countdown
-      setTimeout(() => {
-        setTimeRemaining(Math.floor(wsTimeRemaining / 1000)); // Convert to seconds
-      }, 4000);
-    }
-  }, [showOpponentFinishAnimation, wsTimeRemaining]);
 
-  // Navigate to round result screen immediately when player finishes
-  useEffect(() => {
-    if (isFinished && effectiveMatchData) {
-      console.log('🎯 Player finished quiz, navigating to round result screen');
-      router.push({
-        pathname: '/round-result-screen',
-        params: {
-          userScore: userScore.toString(),
-          totalQuestions: questions.length.toString(),
-          categoryId: category.id,
-          categoryName: category.displayName,
-          bgColor1: category.bgColor1,
-          bgColor2: category.bgColor2,
-          roundNumber: effectiveMatchData.currentRound?.toString() || '1',
-          matchData: effectiveMatchData ? JSON.stringify(effectiveMatchData) : undefined,
-          waitingForOpponent: 'true' // Indicate this is waiting state
-        }
-      });
-    }
-  }, [isFinished, effectiveMatchData, userScore, questions.length, category, router]);
 
-  // Listen for SHOW_RESULTS to update the results screen with actual data
-  useEffect(() => {
-    if (showResults && roundResult) {
-      //console.log('🎯 SHOW_RESULTS received, updating round result screen');
-      router.push({
-        pathname: '/round-result-screen',
-        params: {
-          userScore: userScore.toString(),
-          totalQuestions: questions.length.toString(),
-          categoryId: roundResult.category?.id || category.id,
-          categoryName: roundResult.category?.displayName || category.displayName,
-          bgColor1: roundResult.category?.bgColor1 || category.bgColor1,
-          bgColor2: roundResult.category?.bgColor2 || category.bgColor2,
-          roundNumber: effectiveMatchData?.currentRound?.toString() || '1',
-          roundResult: JSON.stringify(roundResult),
-          matchData: effectiveMatchData ? JSON.stringify(effectiveMatchData) : undefined,
-          waitingForOpponent: 'false' // Show actual results
-        }
-      });
-    }
-  }, [showResults, roundResult, userScore, questions.length, category, effectiveMatchData, router]);
 
-  // Handle 15-second countdown when opponent finishes
-  useEffect(() => {
-    if (opponentFinished && timeRemaining > 0 && !isFinished && !showOpponentFinishAnimation) {
-      const timer = setTimeout(() => {
-        setTimeRemaining(prev => {
-          if (prev <= 1) {
-            // Time's up - force finish the quiz
-            if (effectiveMatchData) {
-              sendFinishedQuiz(userScore);
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+  // Simple UI state management
+  const uiState: 'playing' | 'finished' = isFinished ? 'finished' : 'playing';
 
-      return () => clearTimeout(timer);
-    }
-  }, [opponentFinished, timeRemaining, showOpponentFinishAnimation, isFinished, userScore, sendFinishedQuiz]);
+
   
   // DrawPad shared values
   const pathLength = useSharedValue(0);
@@ -284,11 +240,20 @@ export default function QuizScreen() {
         // Quiz finished
         const finalScore = userScore + (isCorrect ? 1 : 0);
         setIsFinished(true);
-        
-        // Send FINISHED_QUIZ message
-        if (effectiveMatchData) {
+        // Notify server with final score for round result
+        try {
           sendFinishedQuiz(finalScore);
+        } catch (e) {
+          // no-op if not connected
         }
+        // Also request to view results after a brief delay
+        setTimeout(() => {
+          try {
+            sendReadyToViewResults();
+          } catch (_) {}
+        }, 1000);
+        
+        // Quiz finished
         
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
@@ -312,8 +277,168 @@ export default function QuizScreen() {
     }
   };
 
+  // Waiting for Opponent Component (shown when you finished but server hasn't sent results yet)
+  const renderWaitingForOpponent = () => {
+    return (
+      <View style={styles.bothReadyContainer}>
+        <Text style={[styles.bothReadyText, { fontFamily: 'Digitalt' }]}>Esperando al oponente...</Text>
+        {typeof wsTimeRemaining === 'number' && wsTimeRemaining > 0 && (
+          <View style={styles.countdownContainer}>
+            {(() => {
+              const seconds = wsTimeRemaining > 1000 ? Math.ceil(wsTimeRemaining / 1000) : Math.ceil(wsTimeRemaining);
+              return (
+                <Text style={[styles.countdownText, { fontFamily: 'Digitalt' }]}>
+                  {seconds}
+                </Text>
+              );
+            })()}
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  // Result Screen Component
+  const renderResultScreen = () => {
+    // Prefer server-declared winner if available
+    const serverSaysWinnerId = roundResult?.winnerId;
+    const isWinner = serverSaysWinnerId
+      ? serverSaysWinnerId === user?.id
+      : userScore > (matchOpponent?.score || 0);
+
+    // Prefer server scores if available
+    const myId = user?.id ?? '';
+    // Resolve opponent from live match data if available
+    const livePlayers = liveMatchData?.players || matchData?.players || [];
+    const opponentFromLive = livePlayers.find((p: any) => p.id !== myId);
+    const opponentId = opponentFromLive?.id ?? opponent?.id ?? '';
+    const myScoreFromServer = roundResult?.scores?.[myId]?.score;
+    const oppScoreFromServer = opponentId ? roundResult?.scores?.[opponentId]?.score : undefined;
+    const myDisplayScore = typeof myScoreFromServer === 'number' ? myScoreFromServer : userScore;
+    const oppDisplayScore = typeof oppScoreFromServer === 'number' ? oppScoreFromServer : (matchOpponent?.score || 0);
+    
+    return (
+      <View style={styles.resultScreenContainer}>
+        <View style={styles.resultHeader}>
+          <Text style={[styles.resultTitle, { fontFamily: 'Digitalt' }]}>
+            {isWinner ? '¡GANASTE!' : '¡PERDISTE!'}
+          </Text>
+          <Text style={[styles.resultSubtitle, { fontFamily: 'Digitalt' }]}>
+            {serverSaysWinnerId ? 'Resultados de la ronda' : 'Quiz Completado'}
+          </Text>
+        </View>
+        
+        <View style={styles.resultScores}>
+          <View style={styles.playerResult}>
+            <LayeredAvatar avatar={userAvatar} size={50} />
+            <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>{user?.username || 'Tú'}</Text>
+            <Text style={[styles.scoreText, { fontFamily: 'Digitalt' }]}>{myDisplayScore}</Text>
+            <Text style={[styles.detailText, { fontFamily: 'Digitalt' }]}>
+              {myDisplayScore}/{questions.length} correctas
+            </Text>
+          </View>
+          
+          <Text style={[styles.vsText, { fontFamily: 'Digitalt' }]}>VS</Text>
+          
+          <View style={styles.playerResult}>
+            <LayeredAvatar avatar={opponentFromLive?.avatar || matchOpponent?.avatar || userAvatar} size={50} />
+            <Text style={[styles.playerName, { fontFamily: 'Digitalt' }]}>
+              {opponentFromLive?.username || matchOpponent?.username || 'Oponente'}
+            </Text>
+            <Text style={[styles.scoreText, { fontFamily: 'Digitalt' }]}>
+              {oppDisplayScore}
+            </Text>
+            <Text style={[styles.detailText, { fontFamily: 'Digitalt' }]}>
+              {oppDisplayScore}/{questions.length} correctas
+            </Text>
+          </View>
+        </View>
+        
+        <TouchableOpacity 
+          style={styles.continueButton}
+          onPress={() => {
+            // Reset game state for next round
+            setCurrentQuestionIndex(0);
+            setInput('');
+            setIsAnswerCorrect(null);
+            setShowResult(false);
+            setIsFinished(false);
+            setUserScore(0);
+          }}
+        >
+          <Text style={[styles.continueButtonText, { fontFamily: 'Digitalt' }]}>
+            CONTINUAR
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  // Match End Screen Component
+  const renderMatchEndScreen = () => {
+    return (
+      <View style={styles.matchEndContainer}>
+        <View style={styles.matchEndHeader}>
+          <Text style={[styles.matchEndTitle, { fontFamily: 'Digitalt' }]}>
+            ¡BUEN JUEGO!
+          </Text>
+          <Text style={[styles.matchEndSubtitle, { fontFamily: 'Digitalt' }]}>
+            Quiz completado
+          </Text>
+        </View>
+        
+        <View style={styles.finalScores}>
+          <View style={styles.finalPlayerScore}>
+            <LayeredAvatar avatar={userAvatar} size={60} />
+            <Text style={[styles.finalPlayerName, { fontFamily: 'Digitalt' }]}>{user?.username || 'Tú'}</Text>
+            <Text style={[styles.finalScore, { fontFamily: 'Digitalt' }]}>
+              {userScore}
+            </Text>
+            <Text style={[styles.finalDetail, { fontFamily: 'Digitalt' }]}>
+              {userScore}/{questions.length} respuestas correctas
+            </Text>
+          </View>
+        </View>
+        
+        <TouchableOpacity 
+          style={styles.playAgainButton}
+          onPress={() => {
+            // Navigate back to lobby or main menu
+            // This would need to be implemented based on your navigation structure
+            console.log('Play again pressed');
+          }}
+        >
+          <Text style={[styles.playAgainButtonText, { fontFamily: 'Digitalt' }]}>
+            JUGAR DE NUEVO
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+
+
   if (!fontsLoaded) {
     return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text>Loading...</Text></View>;
+  }
+
+  
+  // Simple rendering logic
+  // If server results are available, prefer showing them immediately
+  if (roundResult) {
+    return (
+      <GradientBackground colors={[bgColor1, bgColor2]}>
+        {renderResultScreen()}
+      </GradientBackground>
+    );
+  }
+  // If user finished but results are not yet available, show waiting for opponent
+  if (uiState === 'finished') {
+    return (
+      <GradientBackground colors={[bgColor1, bgColor2]}>
+        {renderWaitingForOpponent()}
+      </GradientBackground>
+    );
   }
 
   return (
@@ -336,17 +461,11 @@ export default function QuizScreen() {
               </View>
             </View>
             
-            {/* Progress indicator / Timer */}
+            {/* Progress indicator */}
             <View style={styles.progressSection}>
-              {opponentFinished && !isFinished && !showOpponentFinishAnimation ? (
-                <Text style={[styles.timerText, { fontFamily: 'Digitalt' }]}>
-                  {timeRemaining}s
-                </Text>
-              ) : (
-                <Text style={[styles.progressText, { fontFamily: 'Digitalt' }]}>
-                  {currentQuestionIndex + 1}/{questions.length}
-                </Text>
-              )}
+              <Text style={[styles.progressText, { fontFamily: 'Digitalt' }]}>
+                {currentQuestionIndex + 1}/{questions.length}
+              </Text>
             </View>
             
             <View style={styles.playerSection}>
@@ -387,22 +506,6 @@ export default function QuizScreen() {
         </View>
         
 
-                {/* Time-15 Animation - Show when opponent finishes */}
-                {showOpponentFinishAnimation && (
-                  <View style={styles.timeAnimationOverlay}>
-                    <View style={styles.opponentFinishContainer}>
-                      <LottieView
-                        source={require('../assets/lotties/extras/Time-15.json')}
-                        autoPlay
-                        loop={false}
-                        style={styles.timeAnimation}
-                      />
-                      <Text style={[styles.opponentFinishText, { fontFamily: 'Digitalt' }]}>
-                        ¡Tu oponente terminó!{'\n'}Tienes 15 segundos restantes
-                      </Text>
-                    </View>
-                  </View>
-                )}
 
         
         {/* Confetti Animation for Correct Answers */}
@@ -678,26 +781,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
-  waitingContainer: {
-    backgroundColor: 'rgba(0, 150, 0, 0.9)',
-    borderRadius: 20,
-    paddingHorizontal: 30,
-    paddingVertical: 20,
-    borderWidth: 3,
-    borderColor: '#fff',
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
-  waitingText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-    textAlign: 'center',
-  },
   answerContainer: {
     backgroundColor: '#fff',
     borderRadius: 25,
@@ -916,5 +999,221 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     letterSpacing: 1,
+  },
+  // Result Screen Styles
+  resultScreenContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  resultHeader: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  resultTitle: {
+    color: '#fff',
+    fontSize: 36,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  resultSubtitle: {
+    color: '#fff',
+    fontSize: 18,
+    opacity: 0.8,
+    textAlign: 'center',
+  },
+  resultScores: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 40,
+  },
+  playerResult: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  scoreText: {
+    color: '#fff',
+    fontSize: 48,
+    fontWeight: 'bold',
+    marginTop: 10,
+  },
+  detailText: {
+    color: '#fff',
+    fontSize: 14,
+    opacity: 0.8,
+    marginTop: 5,
+  },
+  vsText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginHorizontal: 20,
+  },
+  continueButton: {
+    backgroundColor: '#ec4899',
+    borderRadius: 25,
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  continueButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  // Match End Screen Styles
+  matchEndContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  matchEndHeader: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  matchEndTitle: {
+    color: '#fff',
+    fontSize: 42,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  matchEndSubtitle: {
+    color: '#fff',
+    fontSize: 20,
+    opacity: 0.8,
+    textAlign: 'center',
+  },
+  finalScores: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  finalPlayerScore: {
+    alignItems: 'center',
+  },
+  finalPlayerName: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 15,
+  },
+  finalScore: {
+    color: '#fff',
+    fontSize: 64,
+    fontWeight: 'bold',
+    marginTop: 10,
+  },
+  finalDetail: {
+    color: '#fff',
+    fontSize: 16,
+    opacity: 0.8,
+    marginTop: 5,
+  },
+  playAgainButton: {
+    backgroundColor: '#22c55e',
+    borderRadius: 25,
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  playAgainButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  // Both Ready Screen Styles
+  bothReadyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  bothReadyAnimation: {
+    width: 300,
+    height: 300,
+    marginBottom: 30,
+  },
+  bothReadyText: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  bothReadySubtext: {
+    color: '#fff',
+    fontSize: 18,
+    opacity: 0.8,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  countdownContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 50,
+    width: 100,
+    height: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+  countdownText: {
+    color: '#fff',
+    fontSize: 36,
+    fontWeight: 'bold',
+  },
+  // Waiting Screen Styles
+  waitingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  waitingAnimation: {
+    width: 200,
+    height: 200,
+    marginBottom: 30,
+  },
+  waitingText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  waitingSubtext: {
+    color: '#fff',
+    fontSize: 18,
+    opacity: 0.8,
+    textAlign: 'center',
+  },
+  // LISTO Button Styles (similar to roulette screen)
+  listoButton: {
+    backgroundColor: '#FFD616',
+    borderRadius: 25,
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    marginTop: 20,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+  listoButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+    textAlign: 'center',
   },
 });

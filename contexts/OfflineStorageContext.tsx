@@ -3,7 +3,7 @@ import React, { createContext, ReactNode, useContext, useEffect, useState } from
 
 export type HighScore = {
   id: string;
-  mode: 1 | 3 | 5; // minutes
+  mode: 0.5 | 1 | 3 | 5; // 0.5 = 30 seconds, others in minutes
   score: number;
   accuracy: number;
   questionsAnswered: number;
@@ -14,7 +14,7 @@ export type HighScore = {
 type OfflineStorageContextType = {
   highScores: HighScore[];
   addHighScore: (score: Omit<HighScore, 'id' | 'timestamp' | 'synced'>) => Promise<void>;
-  getTopScores: (mode?: 1 | 3 | 5, limit?: number) => HighScore[];
+  getTopScores: (mode?: 0.5 | 1 | 3 | 5, limit?: number) => HighScore[];
   clearAllScores: () => Promise<void>;
   getUnsyncedScores: () => HighScore[];
   markAsSynced: (id: string) => Promise<void>;
@@ -74,7 +74,7 @@ export const OfflineStorageProvider: React.FC<{ children: ReactNode }> = ({ chil
     await saveScores(updatedScores);
   };
 
-  const getTopScores = (mode?: 1 | 3 | 5, limit: number = 10): HighScore[] => {
+  const getTopScores = (mode?: 0.5 | 1 | 3 | 5, limit: number = 10): HighScore[] => {
     let filtered = highScores;
     
     if (mode) {

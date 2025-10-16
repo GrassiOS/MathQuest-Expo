@@ -1,18 +1,20 @@
 import { FontAwesome5 } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts } from 'expo-font';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import LottieView from 'lottie-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Animated,
-    Dimensions,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    Vibration,
-    View
+  Alert,
+  Animated,
+  Dimensions,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  Vibration,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -22,14 +24,30 @@ import InfiniteGameModeButton from '@/components/ui/InfiniteGameModeButton';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useOfflineStorage } from '@/contexts/OfflineStorageContext';
 import {
-    generateQuestion,
-    getDifficultyFromScore,
-    getRandomCategory
+  generateQuestion,
+  getDifficultyFromScore,
+  getRandomCategory
 } from '@/utils/generateQuestions';
 
-const { height } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
-type GameMode = 1 | 3 | 5; // minutes
+// Mascot animations
+const mascotAnimations = {
+  suma: require('../assets/lotties/mascots/Plusito/1v1_Idle.json'),
+  resta: require('../assets/lotties/mascots/Restin/1v1_Idle.json'),
+  multiplicacion: require('../assets/lotties/mascots/Porfix/1v1_Idle.json'),
+  division: require('../assets/lotties/mascots/Dividin/1v1_Idle.json'),
+};
+
+// Custom numpad layout
+const NUMPAD = [
+  [1, 2, 3],
+  [4, 5, 6],
+  [7, 8, 9],
+  ['−', 0, '⌫'],
+];
+
+type GameMode = 0.5 | 1 | 3 | 5; // 0.5 = 30 seconds, others in minutes
 
 export default function InfiniteGameScreen() {
   const [fontsLoaded] = useFonts({
@@ -50,6 +68,13 @@ export default function InfiniteGameScreen() {
   const [isGameActive, setIsGameActive] = useState(false);
   const [gameEnded, setGameEnded] = useState(false);
   const [questionsAnswered, setQuestionsAnswered] = useState(0);
+  const [answerHistory, setAnswerHistory] = useState<Array<{
+    question: string;
+    userAnswer: string;
+    correctAnswer: number;
+    isCorrect: boolean;
+    timestamp: number;
+  }>>([]);
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -57,6 +82,10 @@ export default function InfiniteGameScreen() {
 
   // Timer ref
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Refs to track current score for endGame
+  const scoreRef = useRef(0);
+  const questionsAnsweredRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -64,6 +93,30 @@ export default function InfiniteGameScreen() {
         clearInterval(timerRef.current);
       }
     };
+  }, []);
+
+  // Save answer history to AsyncStorage
+  const saveAnswerHistory = async (history: typeof answerHistory) => {
+    try {
+      await AsyncStorage.setItem('infiniteGameAnswerHistory', JSON.stringify(history));
+    } catch (error) {
+      console.error('Error saving answer history:', error);
+    }
+  };
+
+  // Load answer history from AsyncStorage
+  useEffect(() => {
+    const loadAnswerHistory = async () => {
+      try {
+        const savedHistory = await AsyncStorage.getItem('infiniteGameAnswerHistory');
+        if (savedHistory) {
+          setAnswerHistory(JSON.parse(savedHistory));
+        }
+      } catch (error) {
+        console.error('Error loading answer history:', error);
+      }
+    };
+    loadAnswerHistory();
   }, []);
 
   const startGame = (mode: GameMode) => {
@@ -75,6 +128,11 @@ export default function InfiniteGameScreen() {
     setUserAnswer('');
     setGameEnded(false);
     setIsGameActive(true);
+    
+    // Reset refs
+    scoreRef.current = 0;
+    questionsAnsweredRef.current = 0;
+    
     generateNewQuestion();
     startTimer();
   };
@@ -83,12 +141,13 @@ export default function InfiniteGameScreen() {
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          endGame();
+          // Use a small delay to ensure state updates are captured
+          setTimeout(() => endGame(), 100);
           return 0;
         }
         return prev - 1;
       });
-    }, 1000);
+    }, 1000) as unknown as NodeJS.Timeout;
   };
 
   const generateNewQuestion = () => {
@@ -105,10 +164,31 @@ export default function InfiniteGameScreen() {
     const userNum = parseInt(userAnswer.trim());
     const isCorrect = userNum === currentQuestion.correctAnswer;
 
+    // Save answer to history
+    const newAnswer = {
+      question: currentQuestion.question,
+      userAnswer: userAnswer.trim(),
+      correctAnswer: currentQuestion.correctAnswer,
+      isCorrect,
+      timestamp: Date.now(),
+    };
+    
+    const updatedHistory = [...answerHistory, newAnswer];
+    setAnswerHistory(updatedHistory);
+    saveAnswerHistory(updatedHistory);
+
     if (isCorrect) {
       // Correct answer
-      setScore(prev => prev + 1);
-      setQuestionsAnswered(prev => prev + 1);
+      setScore(prev => {
+        const newScore = prev + 1;
+        scoreRef.current = newScore;
+        return newScore;
+      });
+      setQuestionsAnswered(prev => {
+        const newCount = prev + 1;
+        questionsAnsweredRef.current = newCount;
+        return newCount;
+      });
       
       // Pulse animation for correct answer
       Animated.sequence([
@@ -131,7 +211,11 @@ export default function InfiniteGameScreen() {
     } else {
       // Wrong answer
       setWrongAnswers(prev => prev + 1);
-      setQuestionsAnswered(prev => prev + 1);
+      setQuestionsAnswered(prev => {
+        const newCount = prev + 1;
+        questionsAnsweredRef.current = newCount;
+        return newCount;
+      });
 
       // Shake animation for wrong answer
       Animated.sequence([
@@ -165,23 +249,25 @@ export default function InfiniteGameScreen() {
       clearInterval(timerRef.current);
     }
 
-    // Calculate accuracy
-    const accuracy = questionsAnswered > 0 ? (score / questionsAnswered) * 100 : 0;
+    // Use refs to get the most current values
+    const finalQuestionsAnswered = questionsAnsweredRef.current;
+    const finalScore = scoreRef.current;
+    const accuracy = finalQuestionsAnswered > 0 ? (finalScore / finalQuestionsAnswered) * 100 : 0;
 
     // Save high score
-    if (gameMode && score > 0) {
+    if (gameMode && finalScore > 0) {
       await addHighScore({
         mode: gameMode,
-        score,
+        score: finalScore,
         accuracy,
-        questionsAnswered,
+        questionsAnswered: finalQuestionsAnswered,
       });
     }
 
     // Show game over alert
     Alert.alert(
       '¡Juego Terminado!',
-      `Puntuación: ${score}\nRespuestas correctas: ${score}/${questionsAnswered}\nPrecisión: ${accuracy.toFixed(1)}%`,
+      `Puntuación: ${finalScore}\nRespuestas correctas: ${finalScore}/${finalQuestionsAnswered}\nPrecisión: ${accuracy.toFixed(1)}%`,
       [
         {
           text: 'Jugar de Nuevo',
@@ -204,6 +290,29 @@ export default function InfiniteGameScreen() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleNumpadPress = (val: string | number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    if (val === '⌫') {
+      // Backspace
+      setUserAnswer(prev => prev.slice(0, -1));
+    } else if (val === '−') {
+      // Toggle negative sign
+      setUserAnswer(prev => {
+        if (prev.startsWith('-')) {
+          return prev.slice(1);
+        } else if (prev === '') {
+          return '-';
+        } else {
+          return '-' + prev;
+        }
+      });
+    } else {
+      // Number key
+      setUserAnswer(prev => prev + val);
+    }
+  };
+
   if (!fontsLoaded) {
     return (
       <View style={styles.loadingContainer}>
@@ -223,6 +332,14 @@ export default function InfiniteGameScreen() {
         <AnimatedMathBackground />
 
         <SafeAreaView style={styles.safeArea}>
+          {/* Back button for mode selection */}
+          <TouchableOpacity 
+            style={styles.modeSelectionBackButton}
+            onPress={() => router.back()}
+          >
+            <FontAwesome5 name="arrow-left" size={20} color="#fff" />
+          </TouchableOpacity>
+
           {/* Top-right avatar + coins */}
           <View style={styles.topBar}>
             <View style={styles.avatarBlock}>
@@ -246,6 +363,15 @@ export default function InfiniteGameScreen() {
 
           {/* Mode selection buttons */}
           <View style={styles.modeButtonsWrap}>
+            <InfiniteGameModeButton
+              name="30 SEGUNDOS"
+              route="/infinite-game"
+              gradientColors={['#FF6B9D', '#C44569']}
+              highScore={getTopScores(0.5, 1)[0]?.score || 0}
+              date={getTopScores(0.5, 1)[0] ? new Date(getTopScores(0.5, 1)[0].timestamp).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Sin puntuación'}
+              onPress={() => startGame(0.5)}
+            />
+
             <InfiniteGameModeButton
               name="1 MINUTO"
               route="/infinite-game"
@@ -290,6 +416,27 @@ export default function InfiniteGameScreen() {
       <SafeAreaView style={styles.safeArea}>
         {/* Top bar with timer and score */}
         <View style={styles.gameTopBar}>
+          {/* Back button */}
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => {
+              if (timerRef.current) {
+                clearInterval(timerRef.current);
+              }
+              // Go back to mode selection screen
+              setGameMode(null);
+              setScore(0);
+              setWrongAnswers(0);
+              setQuestionsAnswered(0);
+              setUserAnswer('');
+              setIsGameActive(false);
+              setGameEnded(false);
+              scoreRef.current = 0;
+              questionsAnsweredRef.current = 0;
+            }}
+          >
+            <FontAwesome5 name="arrow-left" size={20} color="#fff" />
+          </TouchableOpacity>
           <View style={styles.statsContainer}>
             <View style={styles.statBox}>
               <Text style={[styles.statLabel, { fontFamily: 'Digitalt' }]}>TIEMPO</Text>
@@ -306,43 +453,83 @@ export default function InfiniteGameScreen() {
           </View>
         </View>
 
-        {/* Question area */}
-        <View style={styles.questionContainer}>
-          {currentQuestion && (
-            <Animated.View style={[
-              styles.questionBox,
-              { 
-                transform: [
-                  { scale: pulseAnim },
-                  { translateX: shakeAnim }
-                ]
-              }
-            ]}>
-              <Text style={[styles.categoryText, { fontFamily: 'Digitalt' }]}>
-                {currentQuestion.category}
-              </Text>
-              <Text style={[styles.questionText, { fontFamily: 'Digitalt' }]}>
-                {currentQuestion.question}
-              </Text>
-            </Animated.View>
-          )}
-        </View>
+        {/* Main Content */}
+        <View style={styles.mainContent}>
+          {/* Question area with mascots on top */}
+          <View style={styles.questionAreaWrapper}>
+            {/* Mascot animations row - positioned on top of card */}
+            <View style={styles.mascotsRow}>
+              {Object.entries(mascotAnimations).map(([key, animation]) => (
+                <View key={key} style={styles.mascotWrapper}>
+                  <LottieView
+                    source={animation}
+                    autoPlay
+                    loop
+                    style={styles.mascotAnimation}
+                  />
+                </View>
+              ))}
+            </View>
 
-        {/* Answer input */}
-        <View style={styles.answerContainer}>
-          <TextInput
-            style={[styles.answerInput, { fontFamily: 'Digitalt' }]}
-            value={userAnswer}
-            onChangeText={setUserAnswer}
-            placeholder="Tu respuesta..."
-            placeholderTextColor="rgba(255,255,255,0.6)"
-            keyboardType="numeric"
-            autoFocus={true}
-            onSubmitEditing={checkAnswer}
-            returnKeyType="done"
-          />
+            {/* Question card */}
+            <View style={styles.questionContainer}>
+              {currentQuestion && (
+                <Animated.View style={[
+                  styles.questionBox,
+                  { 
+                    transform: [
+                      { scale: pulseAnim },
+                      { translateX: shakeAnim }
+                    ]
+                  }
+                ]}>
+                  <Text style={[styles.categoryText, { fontFamily: 'Digitalt' }]}>
+                    {currentQuestion.category}
+                  </Text>
+                  <Text style={[styles.questionText, { fontFamily: 'Digitalt' }]}>
+                    {currentQuestion.question}
+                  </Text>
+                </Animated.View>
+              )}
+            </View>
+          </View>
+
+          {/* Answer Display */}
+          <Animated.View style={[
+            styles.answerDisplay,
+            { transform: [{ scale: pulseAnim }] }
+          ]}>
+            <Text style={[
+              styles.answerText,
+              userAnswer === '' && styles.answerTextEmpty,
+              { fontFamily: 'Digitalt' }
+            ]}>
+              {userAnswer || '0'}
+            </Text>
+          </Animated.View>
+
+          {/* Custom Numpad */}
+          <View style={styles.numpadContainer}>
+            {NUMPAD.map((row, i) => (
+              <View key={i} style={styles.numpadRow}>
+                {row.map((val, j) => (
+                  <TouchableOpacity
+                    key={j}
+                    style={styles.numpadButton}
+                    onPress={() => handleNumpadPress(val)}
+                  >
+                    <Text style={[styles.numpadButtonText, { fontFamily: 'Digitalt' }]}>
+                      {val}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+          </View>
+
+          {/* Submit Button */}
           <TouchableOpacity
-            style={styles.submitButton}
+            style={[styles.submitButton, !userAnswer.trim() && styles.submitButtonDisabled]}
             onPress={checkAnswer}
             disabled={!userAnswer.trim()}
           >
@@ -379,6 +566,39 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  modeSelectionBackButton: {
+    position: 'absolute',
+    top: 10,
+    left: 20,
+    zIndex: 1000,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 10,
+  },
+  backButton: {
+    position: 'absolute',
+    top: 15,
+    left: 0,
+    zIndex: 1000,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 10,
+  },
+  mainContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingTop: 20,
   },
   title: {
     color: '#fff',
@@ -450,6 +670,7 @@ const styles = StyleSheet.create({
   gameTopBar: {
     paddingHorizontal: 20,
     paddingTop: 10,
+    position: 'relative',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -476,15 +697,41 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginTop: 4,
   },
-  questionContainer: {
-    flex: 1,
+  questionAreaWrapper: {
+    alignItems: 'center',
+    width: '100%',
+    position: 'relative',
+  },
+  mascotsRow: {
+    flexDirection: 'row',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    alignItems: 'flex-end',
+    paddingHorizontal: 10,
+    position: 'absolute',
+    top: -30, // Position above the card
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  mascotWrapper: {
+    width: width / 4 - 10,
+    height: 85,
+    marginHorizontal: 1,
+  },
+  mascotAnimation: {
+    width: '100%',
+    height: '100%',
+  },
+  questionContainer: {
+    width: '100%',
+    paddingTop: 45, // Space for mascots
   },
   questionBox: {
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 20,
-    padding: 30,
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 25,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.2)',
@@ -498,31 +745,61 @@ const styles = StyleSheet.create({
   },
   questionText: {
     color: '#fff',
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: 'bold',
     letterSpacing: 2,
     textAlign: 'center',
   },
-  answerContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-    gap: 16,
+  answerDisplay: {
+    backgroundColor: '#fff',
+    borderRadius: 25,
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    width: '85%',
+    alignItems: 'center',
+    marginVertical: 10,
   },
-  answerInput: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    fontSize: 24,
+  answerText: {
+    color: '#1f2937',
+    fontSize: 32,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+  },
+  answerTextEmpty: {
+    color: '#9ca3af',
+  },
+  numpadContainer: {
+    width: '100%',
+    paddingHorizontal: 10,
+  },
+  numpadRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 10,
+    gap: 12,
+  },
+  numpadButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 26,
+    width: 80,
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  numpadButtonText: {
     color: '#fff',
-    textAlign: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.2)',
+    fontSize: 24,
+    fontWeight: 'bold',
   },
   submitButton: {
+    width: '85%',
     height: 50,
     borderRadius: 25,
     overflow: 'hidden',
+    marginTop: 10,
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
   },
   submitButtonGradient: {
     flex: 1,

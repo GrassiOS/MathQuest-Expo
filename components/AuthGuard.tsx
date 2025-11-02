@@ -1,5 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { useFonts } from 'expo-font';
+import { useFontContext } from '@/contexts/FontsContext';
 import { router, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -10,22 +10,19 @@ interface AuthGuardProps {
 
 export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   const { user, loading } = useAuth();
+  const { fontsLoaded } = useFontContext();
   const segments = useSegments();
-
-  const [fontsLoaded] = useFonts({
-    Digitalt: require('../assets/fonts/Digitalt.otf'),
-    'Gilroy-Black': require('../assets/fonts/Gilroy-Black.ttf'),
-  });
 
   useEffect(() => {
     if (loading || !fontsLoaded) return;
 
-    const inAuthGroup = segments[0] === '(tabs)' || segments[0] === 'matchmaking-screen' || segments[0] === 'roulette-screen' || segments[0] === 'quiz-screen' || segments[0] === 'avatar-customization-screen' || segments[0] === 'game-results-screen' || segments[0] === 'online-game' || segments[0] === 'infinite-game' || segments[0] === 'lobby-screen' || segments[0] === 'online-game-screen' || segments[0] === 'round-result-screen' || segments[0] === 'match-end-screen';
+    const inAuthGroup = segments[0] === '(tabs)' || segments[0] === '(games)' || segments[0] === '(modals)';
+    const isAuthPage = segments[0] === 'login' || segments[0] === 'signup' || segments[0] === 'forgot-password' || segments[0] === '(auth)';
 
     if (!user && inAuthGroup) {
       // User is not authenticated but trying to access protected route
       router.replace('/login' as any);
-    } else if (user && !inAuthGroup && segments[0] !== 'login' && segments[0] !== 'signup' && segments[0] !== 'forgot-password') {
+    } else if (user && !inAuthGroup && !isAuthPage) {
       // User is authenticated but on auth screen (except for auth pages)
       router.replace('/(tabs)' as any);
     }

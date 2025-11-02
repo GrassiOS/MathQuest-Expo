@@ -1,8 +1,16 @@
-import { FontAwesome5 } from '@expo/vector-icons';
-import { useFonts } from 'expo-font';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import {
+  Fire,
+  GameController,
+  GearSix,
+  Lightning,
+  Lock,
+  PencilSimple,
+  Percent,
+  SignOut,
+} from 'phosphor-react-native';
 import React from 'react';
 import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LayeredAvatar } from '@/components/LayeredAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
+import { useFontContext } from '@/contexts/FontsContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -23,17 +32,14 @@ const USER_1 = {
 };
 
 export default function UserScreen() {
-  const [fontsLoaded] = useFonts({
-    Digitalt: require('../../assets/fonts/Digitalt.otf'),
-    'Gilroy-Black': require('../../assets/fonts/Gilroy-Black.ttf'),
-  });
+  const { fontsLoaded } = useFontContext();
 
   const { avatar: userAvatar } = useAvatar();
   const { user, signOut } = useAuth();
 
   const handleCustomizeAvatar = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push('/avatar-customization-screen');
+    router.push('/(modals)/avatar-customization-screen');
   };
 
   const handleLogout = () => {
@@ -80,9 +86,10 @@ export default function UserScreen() {
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>
-              PROFILE
-            </Text>
+            <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>Perfil</Text>
+            <TouchableOpacity style={styles.headerAction} activeOpacity={0.8}>
+              <GearSix size={20} color="#fff" weight="bold" />
+            </TouchableOpacity>
           </View>
 
           {/* User Profile Section */}
@@ -99,7 +106,7 @@ export default function UserScreen() {
                   style={styles.layeredAvatar}
                 />
                 <View style={styles.customizeOverlay}>
-                  <FontAwesome5 name="edit" size={16} color="#fff" />
+                  <PencilSimple size={16} color="#fff" weight="bold" />
                 </View>
               </TouchableOpacity>
               <View style={styles.levelBadge}>
@@ -125,7 +132,7 @@ export default function UserScreen() {
             
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
-                <FontAwesome5 name="gamepad" size={24} color="#4f46e5" />
+                <GameController size={24} color="#4f46e5" weight="bold" />
                 <Text style={[styles.statNumber, { fontFamily: 'Digitalt' }]}>
                   {USER_1.gamesPlayed}
                 </Text>
@@ -135,7 +142,7 @@ export default function UserScreen() {
               </View>
               
               <View style={styles.statCard}>
-                <FontAwesome5 name="percentage" size={24} color="#22c55e" />
+                <Percent size={24} color="#22c55e" weight="bold" />
                 <Text style={[styles.statNumber, { fontFamily: 'Digitalt' }]}>
                   {USER_1.winRate}%
                 </Text>
@@ -155,7 +162,7 @@ export default function UserScreen() {
             <View style={styles.achievementsList}>
               <View style={styles.achievementItem}>
                 <View style={styles.achievementIcon}>
-                  <FontAwesome5 name="fire" size={20} color="#f97316" />
+                  <Fire size={20} color="#f97316" weight="fill" />
                 </View>
                 <View style={styles.achievementContent}>
                   <Text style={[styles.achievementTitle, { fontFamily: 'Digitalt' }]}>
@@ -169,7 +176,7 @@ export default function UserScreen() {
               
               <View style={styles.achievementItem}>
                 <View style={styles.achievementIcon}>
-                  <FontAwesome5 name="bolt" size={20} color="#eab308" />
+                  <Lightning size={20} color="#eab308" weight="fill" />
                 </View>
                 <View style={styles.achievementContent}>
                   <Text style={[styles.achievementTitle, { fontFamily: 'Digitalt' }]}>
@@ -183,7 +190,7 @@ export default function UserScreen() {
               
               <View style={[styles.achievementItem, styles.achievementLocked]}>
                 <View style={styles.achievementIcon}>
-                  <FontAwesome5 name="lock" size={20} color="#6b7280" />
+                  <Lock size={20} color="#6b7280" weight="fill" />
                 </View>
                 <View style={styles.achievementContent}>
                   <Text style={[styles.achievementTitle, styles.achievementTitleLocked, { fontFamily: 'Digitalt' }]}>
@@ -204,7 +211,7 @@ export default function UserScreen() {
               onPress={handleLogout}
               activeOpacity={0.8}
             >
-              <FontAwesome5 name="sign-out-alt" size={20} color="#ef4444" />
+              <SignOut size={20} color="#ef4444" weight="bold" />
               <Text style={[styles.logoutText, { fontFamily: 'Digitalt' }]}>
                 CERRAR SESIÓN
               </Text>
@@ -242,12 +249,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 20,
     paddingBottom: 20,
+    position: 'relative',
   },
   title: {
     color: '#fff',
     fontSize: 28,
     fontWeight: 'bold',
     letterSpacing: 2,
+  },
+  headerAction: {
+    position: 'absolute',
+    right: 24,
+    top: 24,
+    padding: 6,
+    borderRadius: 16,
   },
   profileSection: {
     alignItems: 'center',

@@ -1,20 +1,32 @@
 {
-  "name": "mathquest-websocket-server",
+  "name": "websocket-server",
   "version": "1.0.0",
-  "description": "WebSocket server for MathQuest 1v1 online game",
-  "main": "index.js",
+  "description": "Servidor WebSocket para chat multijugador en tiempo real",
+  "main": "websocket-server.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node websocket-server.js",
+    "dev": "nodemon websocket-server.js",
+    "get-ip": "node ../scripts/get-ip.js",
+    "test-connection": "node ../scripts/test-connection.js",
+    "start-with-ip": "node ../scripts/start-server.js"
   },
   "dependencies": {
-    "ws": "^8.14.2",
-    "uuid": "^9.0.1"
+    "@supabase/supabase-js": "^2.75.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.2"
   },
-  "keywords": ["websocket", "game", "mathquest"],
-  "author": "MathQuest Team",
+  "keywords": [
+    "websocket",
+    "socket.io",
+    "chat",
+    "realtime",
+    "multijugador"
+  ],
+  "author": "Tu Nombre",
   "license": "MIT"
 }

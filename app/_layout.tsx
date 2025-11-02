@@ -1,139 +1,28 @@
-
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-
 import AuthGuard from '@/components/AuthGuard';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { AvatarProvider } from '@/contexts/AvatarContext';
+import { FontProvider } from '@/contexts/FontsContext';
 import { GameProvider } from '@/contexts/GameContext';
 import { OfflineStorageProvider } from '@/contexts/OfflineStorageContext';
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+import { useFrameworkReady } from '@/hooks/useFrameworkReady';
+import { Slot } from 'expo-router';
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
-    'Digitalt': require('../assets/fonts/Digitalt.otf'),
-    'Gilroy-Black': require('../assets/fonts/Gilroy-Black.ttf'),
-  });
-
-  useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
-
-  if (!fontsLoaded) {
-    return null;
-  }
+  useFrameworkReady();
 
   return (
-    <AuthProvider>
-      <AuthGuard>
-        <AvatarProvider>
-          <GameProvider>
-            <OfflineStorageProvider>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="login" />
-                <Stack.Screen name="signup" />
-                <Stack.Screen name="forgot-password" />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen 
-                  name="matchmaking-screen" 
-                  options={{ 
-                    presentation: 'fullScreenModal',
-                    gestureEnabled: false,
-                    animation: 'slide_from_bottom'
-                  }} 
-                />
-                <Stack.Screen 
-                  name="roulette-screen" 
-                  options={{ 
-                    presentation: 'fullScreenModal',
-                    gestureEnabled: false,
-                    animation: 'slide_from_right'
-                  }} 
-                />
-                <Stack.Screen 
-                  name="quiz-screen" 
-                  options={{ 
-                    presentation: 'fullScreenModal',
-                    gestureEnabled: false,
-                    animation: 'slide_from_right'
-                  }} 
-                />
-                <Stack.Screen 
-                  name="avatar-customization-screen" 
-                  options={{ 
-                    presentation: 'modal',
-                    gestureEnabled: true,
-                    animation: 'slide_from_bottom'
-                  }} 
-                />
-                <Stack.Screen 
-                  name="game-results-screen" 
-                  options={{ 
-                    presentation: 'fullScreenModal',
-                    gestureEnabled: false,
-                    animation: 'fade'
-                  }} 
-                />
-                <Stack.Screen 
-                  name="online-game" 
-                  options={{ 
-                    presentation: 'card',
-                    gestureEnabled: true,
-                    animation: 'slide_from_right',
-                    headerShown: false
-                  }} 
-                />
-                <Stack.Screen 
-                  name="infinite-game" 
-                  options={{ 
-                    presentation: 'fullScreenModal',
-                    gestureEnabled: false,
-                    animation: 'slide_from_right'
-                  }} 
-                />
-                <Stack.Screen 
-                  name="lobby-screen" 
-                  options={{ 
-                    presentation: 'fullScreenModal',
-                    gestureEnabled: false,
-                    animation: 'slide_from_bottom'
-                  }} 
-                />
-                <Stack.Screen 
-                  name="online-game-screen" 
-                  options={{ 
-                    presentation: 'fullScreenModal',
-                    gestureEnabled: false,
-                    animation: 'slide_from_right'
-                  }} 
-                />
-                <Stack.Screen 
-                  name="round-result-screen" 
-                  options={{ 
-                    presentation: 'fullScreenModal',
-                    gestureEnabled: false,
-                    animation: 'fade'
-                  }} 
-                />
-                <Stack.Screen 
-                  name="match-end-screen" 
-                  options={{ 
-                    presentation: 'fullScreenModal',
-                    gestureEnabled: false,
-                    animation: 'fade'
-                  }} 
-                />
-              </Stack>
-            </OfflineStorageProvider>
-          </GameProvider>
-        </AvatarProvider>
-      </AuthGuard>
-    </AuthProvider>
+    <FontProvider>
+      <AuthProvider>
+        <AuthGuard>
+          <AvatarProvider>
+            <GameProvider>
+              <OfflineStorageProvider>
+                <Slot />
+              </OfflineStorageProvider>
+            </GameProvider>
+          </AvatarProvider>
+        </AuthGuard>
+      </AuthProvider>
+    </FontProvider>
   );
 }

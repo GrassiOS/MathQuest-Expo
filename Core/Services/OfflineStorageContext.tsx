@@ -9,12 +9,15 @@ export type HighScore = {
   questionsAnswered: number;
   timestamp: string;
   synced: boolean;
+  alias?: string; // Optional alias for the score
+  username?: string; // Username of the player
 };
 
 type OfflineStorageContextType = {
   highScores: HighScore[];
   addHighScore: (score: Omit<HighScore, 'id' | 'timestamp' | 'synced'>) => Promise<void>;
   getTopScores: (mode?: 0.5 | 1 | 3 | 5, limit?: number) => HighScore[];
+  getTopScoresToday: (mode?: 0.5 | 1 | 3 | 5, limit?: number) => HighScore[];
   clearAllScores: () => Promise<void>;
   getUnsyncedScores: () => HighScore[];
   markAsSynced: (id: string) => Promise<void>;
@@ -91,6 +94,27 @@ export const OfflineStorageProvider: React.FC<{ children: ReactNode }> = ({ chil
       .slice(0, limit);
   };
 
+  const getTopScoresToday = (mode?: 0.5 | 1 | 3 | 5, limit: number = 3): HighScore[] => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todayScores = highScores.filter(score => {
+      const scoreDate = new Date(score.timestamp);
+      scoreDate.setHours(0, 0, 0, 0);
+      const isSameDay = scoreDate.getTime() === today.getTime();
+      const modeMatches = mode ? score.mode === mode : true;
+      return isSameDay && modeMatches;
+    });
+    
+    return todayScores
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy;
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      })
+      .slice(0, limit);
+  };
+
   const getUnsyncedScores = (): HighScore[] => {
     return highScores.filter(score => !score.synced);
   };
@@ -115,6 +139,7 @@ export const OfflineStorageProvider: React.FC<{ children: ReactNode }> = ({ chil
     highScores,
     addHighScore,
     getTopScores,
+    getTopScoresToday,
     clearAllScores,
     getUnsyncedScores,
     markAsSynced,

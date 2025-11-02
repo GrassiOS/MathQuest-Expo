@@ -1,14 +1,17 @@
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useRef } from 'react';
-import { Animated, GestureResponderEvent, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { Href } from 'expo-router';
 
 type GameModeButtonProps = {
   name: string;
-  route: string;
+  route: Href;
+  
   imagePath?: any; // require('path/to/image') or { uri }
   gradientColors: [string, string, ...string[]]; // at least two colors
-  onPress: (e: GestureResponderEvent) => void;
+  onPress?: () => void; // optional
 };
 
 export const GameModeButton: React.FC<GameModeButtonProps> = ({
@@ -38,9 +41,9 @@ export const GameModeButton: React.FC<GameModeButtonProps> = ({
     }).start();
   };
 
-  const handlePress = (e: GestureResponderEvent) => {
+  const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onPress(e);
+    onPress?.();
   };
 
   const scale = pressAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.98] });

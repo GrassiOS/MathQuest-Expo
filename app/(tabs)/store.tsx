@@ -1,9 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-export default function QuestScreen() {
+export default function StoreScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>QUEST ???</Text>
+      <Text style={styles.text}>TIENDA!!!</Text>
     </View>
   );
 }

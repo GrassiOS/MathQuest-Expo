@@ -14,4 +14,11 @@ export type AvatarAssets = {
     clothes: { [key: string]: any };
 };
 
+// default avatar
+export const defaultAvatar: Avatar = {
+    skin_asset: 'skin01',
+    eyes_asset: 'eyes01',
+    clothes_asset: 'clothes01',
+};
+
 export type AvatarCategory = 'skin' | 'hair' | 'eyes' | 'mouth' | 'clothes';

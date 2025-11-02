@@ -1,15 +1,15 @@
 import { FontAwesome5 } from '@expo/vector-icons';
-import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { Link, router } from 'expo-router';
 import React from 'react';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LayeredAvatar } from '@/components/LayeredAvatar';
 import AnimatedMathBackground from '@/components/ui/AnimatedMathBackground';
 import GameModeButton from '@/components/ui/GameModeButton';
 import { useAvatar } from '@/contexts/AvatarContext';
+import { useFontContext } from '@/contexts/FontsContext';
 
 const { height } = Dimensions.get('window');
 
@@ -20,10 +20,7 @@ const USER_1 = {
 };
 
 export default function PlayScreen() {
-  const [fontsLoaded] = useFonts({
-    Digitalt: require('../../assets/fonts/Digitalt.otf'),
-    'Gilroy-Black': require('../../assets/fonts/Gilroy-Black.ttf'),
-  });
+  const { fontsLoaded } = useFontContext();
 
   const { avatar: userAvatar } = useAvatar();
 
@@ -62,33 +59,34 @@ export default function PlayScreen() {
           <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>SELECCIONA{"\n"}MODO DE JUEGO!</Text>
         </View>
 
+
+
         {/* Game mode buttons */}
         <View style={styles.buttonsWrap}>
-          {/*
+
           <GameModeButton
-            name="ONLINE!"
-            route="/online-game"
-            gradientColors={["#FFA65A", "#FF5EA3"]}
-            imagePath={require('../../assets/images/competitive/1v1_roulette.png')}
-            onPress={() => router.push('/online-game')}
-          />
-          <GameModeButton
-            name="AVENTURA!"
-            route="/infinite-game"
-            gradientColors={["#8EF06E", "#31C45A"]}
-            imagePath={require('../../assets/images/competitive/1v1_roulette.png')}
-            onPress={() => router.push('/infinite-game')}
-          />
-          */}
-          <GameModeButton
-            name="INFINITO!"
-            route="/infinite-game"
-            gradientColors={["#6CCBFF", "#5B9FED"]}
-            imagePath={require('../../assets/images/competitive/1v1_roulette.png')}
-            onPress={() => router.push('/infinite-game')}
+            name="COMPETITIVO!"
+            route="/(games)/matchmaking-game"
+            gradientColors={["#FF6A6A", "#FF3D3D"]}
+            imagePath={require('@/assets/images/competitive/1v1_roulette.png')}
+            onPress={() => router.push('/(games)/matchmaking-screen')}
           />
         </View>
       </SafeAreaView>
+      {/* Floating Leaderboard button to new screen */}
+      <Link href="/(games)/leaderboard" asChild>
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => {
+            console.log('Leaderboard button pressed (play tab)');
+          }}
+        >
+          <LinearGradient colors={["#FFD45E", "#FFA500"]} style={styles.fabGradient}>
+            <FontAwesome5 name="trophy" size={18} color="#fff" />
+            <Text style={styles.fabText}>Tabla</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Link>
     </View>
   );
 }
@@ -169,5 +167,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 22,
     justifyContent: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 30,
+    width: 120,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    elevation: 8,
+  },
+  fabGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  fabText: {
+    color: '#fff',
+    fontWeight: '700',
   },
 });

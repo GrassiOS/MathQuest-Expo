@@ -3,7 +3,7 @@
  * Handles user profile management, statistics, and preferences
  */
 
-import { Avatar } from '../../Data/Models/avatar';
+import { Avatar } from '../../data/Models/avatar';
 
 export interface UserProfile {
   id: string;
@@ -156,3 +156,39 @@ class UserService {
 }
 
 export const userService = new UserService();
+
+// ----- Rank helpers (UI convenience) -----
+export interface RankRowUI {
+  id: string;
+  name: string;
+  min_points: number;
+  max_points: number;
+  color?: string | null;
+  icon_url?: string | null;
+}
+
+export type RankProgress = {
+  progressPercent: number; // 0..1
+  pointsToNext: number; // 0 if top rank
+};
+
+export function computeRankProgress(
+  points: number,
+  currentRank: RankRowUI | null,
+  nextRank: RankRowUI | null
+): RankProgress {
+  if (currentRank && nextRank) {
+    const span = Math.max(1, nextRank.min_points - currentRank.min_points);
+    const progressPercent = Math.min(1, Math.max(0, (points - currentRank.min_points) / span));
+    const pointsToNext = Math.max(0, nextRank.min_points - points);
+    return { progressPercent, pointsToNext };
+  }
+
+  if (!currentRank && nextRank) {
+    const progressPercent = Math.min(1, Math.max(0, points / Math.max(1, nextRank.min_points)));
+    const pointsToNext = Math.max(0, nextRank.min_points - points);
+    return { progressPercent, pointsToNext };
+  }
+
+  return { progressPercent: 1, pointsToNext: 0 };
+}

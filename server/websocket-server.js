@@ -1,5 +1,3 @@
-require('dotenv').config();
-
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -7,8 +5,8 @@ const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 
 // Configuración de Supabase
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = 'https://fdfmtjjeylzznldkrqwl.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZkZm10ampleWx6em5sZGtycXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc4OTc1MjUsImV4cCI6MjA3MzQ3MzUyNX0.NVrultR2VA-LI-gqow7ckOsOCb1UvQ08BTfBqImveCc';
 
 // Crear cliente de Supabase
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -58,12 +56,11 @@ setInterval(cleanupOrphanedGames, 2 * 60 * 1000);
 
 // Categorías del juego
 const GAME_CATEGORIES = [
-  { id: 'sumas', name: 'Sumas', emoji: '➕', color: '#4CAF50' },
-  { id: 'restas', name: 'Restas', emoji: '➖', color: '#F44336' },
-  { id: 'multiplicacion', name: 'Multiplicación', emoji: '✖️', color: '#FF9800' },
-  { id: 'division', name: 'División', emoji: '➗', color: '#9C27B0' },
-  { id: 'fracciones', name: 'Fracciones', emoji: '🔢', color: '#2196F3' },
-  { id: 'totalin', name: 'TotalIn', emoji: '🎯', color: '#E91E63' }
+  { id: 'sumas', name: 'Sumas', emoji: 'Plusito', color: '#00F715' },
+  { id: 'restas', name: 'Restas', emoji: 'Restin', color: '#6DBCFD' },
+  { id: 'multiplicacion', name: 'Multiplicación', emoji: 'Porfix', color: '#FD5353' },
+  { id: 'division', name: 'División', emoji: 'Dividin', color: '#F2F700' },
+  { id: 'totalin', name: 'TotalIn', emoji: 'Totalin', color: '#C71BED' }
 ];
 
 // Función para seleccionar categoría aleatoria
@@ -263,9 +260,6 @@ function generateExercises(category, count = 6) {
       case 'division':
         exercise = generateDivisionExercise();
         break;
-      case 'fracciones':
-        exercise = generateFractionExercise();
-        break;
       case 'totalin':
         // Mezclar todas las categorías
         const categories = ['sumas', 'restas', 'multiplicacion', 'division'];
@@ -337,20 +331,6 @@ function generateDivisionExercise() {
     answer,
     options: generateOptions(answer),
     category: 'division'
-  };
-}
-
-function generateFractionExercise() {
-  const numerator = Math.floor(Math.random() * 10) + 1;
-  const denominator = Math.floor(Math.random() * 10) + 2;
-  const answer = Math.round((numerator / denominator) * 100) / 100;
-  
-  return {
-    id: `frac_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    question: `${numerator}/${denominator} = ?`,
-    answer,
-    options: generateOptions(answer),
-    category: 'fracciones'
   };
 }
 
@@ -1403,13 +1383,12 @@ function startRound(roomId) {
 
   const roundNumber = game.currentRound + 1;
   // Definir rotación de categorías por ronda
-  const CATEGORY_SEQUENCE = ['sumas', 'restas', 'multiplicacion', 'division', 'fracciones'];
+  const CATEGORY_SEQUENCE = ['sumas', 'restas', 'multiplicacion', 'division'];
   const CATEGORY_DEFS = {
-    sumas: { id: 'sumas', name: 'Sumas', emoji: '➕', color: '#4CAF50' },
-    restas: { id: 'restas', name: 'Restas', emoji: '➖', color: '#F44336' },
-    multiplicacion: { id: 'multiplicacion', name: 'Multiplicación', emoji: '✖️', color: '#FF9800' },
-    division: { id: 'division', name: 'División', emoji: '➗', color: '#9C27B0' },
-    fracciones: { id: 'fracciones', name: 'Fracciones', emoji: '🔢', color: '#2196F3' },
+    sumas: { id: 'sumas', name: 'Sumas', emoji: 'Plusito', color: '#00F715' },//6DBCFD
+    restas: { id: 'restas', name: 'Restas', emoji: 'Restin', color: '#6DBCFD' },
+    multiplicacion: { id: 'multiplicacion', name: 'Multiplicación', emoji: 'Porfix', color: '#FD5353' },
+    division: { id: 'division', name: 'División', emoji: 'Dividin', color: '#F2F700' },
   };
   // Elegir categoría aleatoria SIN repetir dentro del juego
   const allIds = CATEGORY_SEQUENCE;
@@ -1761,7 +1740,7 @@ async function finishGame(game, roomId, options = {}) {
 }
 
 // Importar función para obtener IP automáticamente
-const { getLocalIP } = require('../scripts/get-ip.js');
+const { getLocalIP } = require('../scripts/get-ip');
 
 // Iniciar servidor
 const PORT = process.env.PORT || 3001;

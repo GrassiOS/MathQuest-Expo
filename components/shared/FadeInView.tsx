@@ -4,23 +4,59 @@ import { Animated, ViewProps } from 'react-native';
 interface FadeInViewProps extends ViewProps {
   delay?: number;
   duration?: number;
+  distance?: number;
+  from?: 'none' | 'left' | 'right' | 'top' | 'bottom';
   children: React.ReactNode;
 }
 
 export function FadeInView({
   delay = 0,
   duration = 600,
+  distance = 20,
+  from = 'none',
   children,
   style,
   ...props
 }: FadeInViewProps) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(20)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Set initial offset based on direction
+    switch (from) {
+      case 'left':
+        translateX.setValue(-distance);
+        translateY.setValue(0);
+        break;
+      case 'right':
+        translateX.setValue(distance);
+        translateY.setValue(0);
+        break;
+      case 'top':
+        translateY.setValue(-distance);
+        translateX.setValue(0);
+        break;
+      case 'bottom':
+        translateY.setValue(distance);
+        translateX.setValue(0);
+        break;
+      case 'none':
+      default:
+        translateX.setValue(0);
+        translateY.setValue(0);
+        break;
+    }
+
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
+        duration,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateX, {
+        toValue: 0,
         duration,
         delay,
         useNativeDriver: true,
@@ -32,7 +68,7 @@ export function FadeInView({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [delay, duration]);
+  }, [delay, duration, distance, from]);
 
   return (
     <Animated.View
@@ -40,7 +76,7 @@ export function FadeInView({
         style,
         {
           opacity,
-          transform: [{ translateY }],
+          transform: [{ translateX }, { translateY }],
         },
       ]}
       {...props}>

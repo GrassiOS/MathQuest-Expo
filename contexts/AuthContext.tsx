@@ -10,6 +10,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<{ error: any }>;
   refreshSession: () => Promise<{ user: AuthUser | null; error: any }>;
   clearAuthData: () => Promise<void>;
+  getUserStats: (userId: string) => Promise<{ gamesPlayed: number; wins: number; winRate: number }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -131,6 +132,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const getUserStats = async (userId: string) => {
+    try {
+      return await AuthService.getUserStats(userId);
+    } catch (error) {
+      return { gamesPlayed: 0, wins: 0, winRate: 0 };
+    }
+  };
+
   const value: AuthContextType = {
     user,
     loading,
@@ -140,6 +149,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     resetPassword,
     refreshSession,
     clearAuthData,
+    getUserStats,
   };
 
   return (

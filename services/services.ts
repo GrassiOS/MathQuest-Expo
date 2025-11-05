@@ -1,4 +1,3 @@
-import { Avatar } from '@/types/avatar';
 import { io, Socket } from 'socket.io-client';
 import { getAutoServerURL } from '../config/auto-discovery';
 
@@ -16,7 +15,6 @@ export interface WebSocketMessage {
 export interface User {
   id: string;
   username: string;
-  avatar?: Avatar | null;
   socketId: string;
   joinedAt: string;
 }
@@ -609,7 +607,7 @@ class WebSocketService {
     this.waitingForPlayerListeners = this.waitingForPlayerListeners.filter(l => l !== listener);
   }
 
-  removePlayerFoundListener(listener: (data: { roomId: string; message: string; opponent: { userId: string; username: string }; users: User[]; messages: WebSocketMessage[] }) => void) {
+  removePlayerFoundListener(listener: (data: { roomId: string; message: string; opponent: { userId: string; username: string }; users: User[]; messages: WebSocketMessage[]; selectedCategory?: { id: string; name: string; emoji: string; color: string } }) => void) {
     this.playerFoundListeners = this.playerFoundListeners.filter(l => l !== listener);
   }
 

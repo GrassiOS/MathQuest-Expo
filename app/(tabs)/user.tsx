@@ -2,40 +2,91 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import {
-  Fire,
-  GameController,
-  GearSix,
-  Lightning,
-  Lock,
-  PencilSimple,
-  Percent,
-  SignOut,
+  CalendarBlankIcon,
+  CaretRightIcon,
+  GameControllerIcon,
+  GearSixIcon,
+  PencilSimpleIcon,
+  PercentIcon,
+  SignOutIcon,
 } from 'phosphor-react-native';
 import React from 'react';
-import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, FlatList, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LayeredAvatar } from '@/components/LayeredAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useFontContext } from '@/contexts/FontsContext';
+// stats are fetched via service
+import { FadeInView } from '@/components/shared/FadeInView';
+import { getUserMatchesDetailed, getUserStats, UserMatchItem } from '@/services/SupabaseService';
 
 const { width, height } = Dimensions.get('window');
 
-const USER_1 = {
-  name: 'GRASSYOG',
-  score: 1,
-  avatar: 'G',
-  level: 5,
-  gamesPlayed: 23,
-  winRate: 78,
-};
+
 
 export default function UserScreen() {
   const { fontsLoaded } = useFontContext();
 
   const { avatar: userAvatar } = useAvatar();
   const { user, signOut } = useAuth();
+  const [gamesPlayed, setGamesPlayed] = React.useState(0);
+  const [winRate, setWinRate] = React.useState(0);
+  const [recentMatch, setRecentMatch] = React.useState<UserMatchItem | null>(null);
+  const [isRecentOpen, setIsRecentOpen] = React.useState(false);
+  const [recentMatches, setRecentMatches] = React.useState<UserMatchItem[]>([]);
+  const [isRecentReady, setIsRecentReady] = React.useState(false);
+
+  const formatDateShort = (iso: string | null): string => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const day = d.getDate();
+    const month = d.toLocaleString('es-ES', { month: 'short' }).toUpperCase();
+    return `${day} ${month}`;
+  };
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const loadStats = async () => {
+      if (!user?.id) return;
+      const stats = await getUserStats(user.id);
+      if (!isMounted || !stats) return;
+      setGamesPlayed(stats.totalMatches);
+      const computedWinRate = stats.totalMatches > 0 ? Math.round((stats.wins / stats.totalMatches) * 100) : 0;
+      setWinRate(computedWinRate);
+    };
+
+    loadStats();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const loadAllMatches = async () => {
+      if (!isRecentOpen || !user?.id) return;
+      setIsRecentReady(false);
+      const all = await getUserMatchesDetailed(user.id, { status: 'finished', limit: 100 });
+      if (cancelled) return;
+      setRecentMatches(all);
+      setIsRecentReady(true);
+    };
+    loadAllMatches();
+    return () => {
+      cancelled = true;
+    };
+  }, [isRecentOpen, user?.id]);
+
+  React.useEffect(() => {
+    const loadLatest = async () => {
+      if (!user?.id) return;
+      const latest = await getUserMatchesDetailed(user.id, { status: 'finished', limit: 1 });
+      setRecentMatch(latest[0] ?? null);
+    };
+    loadLatest();
+  }, [user?.id]);
 
   const handleCustomizeAvatar = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -78,21 +129,24 @@ export default function UserScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#6b46c1', '#6b46c1']}
+        colors={['#A855F7', '#8A56FE']}
         style={styles.gradientBackground}
       />
 
       <SafeAreaView style={styles.safeArea}>
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>Perfil</Text>
-            <TouchableOpacity style={styles.headerAction} activeOpacity={0.8}>
-              <GearSix size={20} color="#fff" weight="bold" />
-            </TouchableOpacity>
-          </View>
+          <FadeInView from="top" delay={0}>
+            <View style={styles.header}>
+              <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>PERFIL</Text>
+              <TouchableOpacity style={styles.headerAction} activeOpacity={0.8}>
+                <GearSixIcon size={20} color="#fff" weight="fill" />
+              </TouchableOpacity>
+            </View>
+          </FadeInView>
 
           {/* User Profile Section */}
+          <FadeInView from="top" delay={100}>
           <View style={styles.profileSection}>
             <View style={styles.avatarContainer}>
               <TouchableOpacity 
@@ -106,103 +160,84 @@ export default function UserScreen() {
                   style={styles.layeredAvatar}
                 />
                 <View style={styles.customizeOverlay}>
-                  <PencilSimple size={16} color="#fff" weight="bold" />
+                  <PencilSimpleIcon size={16} color="#fff" weight="bold" />
                 </View>
               </TouchableOpacity>
-              <View style={styles.levelBadge}>
-                <Text style={[styles.levelText, { fontFamily: 'Digitalt' }]}>
-                  {USER_1.level}
-                </Text>
-              </View>
             </View>
             
             <Text style={[styles.userName, { fontFamily: 'Digitalt' }]}>
-              {user?.username || USER_1.name}
+              @{user?.username}
             </Text>
             <Text style={[styles.userEmail, { fontFamily: 'Gilroy-Black' }]}>
               {user?.email}
             </Text>
           </View>
+          </FadeInView>
 
           {/* Stats Section */}
+          <FadeInView from="bottom" delay={200}>
           <View style={styles.statsSection}>
-            <Text style={[styles.sectionTitle, { fontFamily: 'Gilroy-Black' }]}>
-              Statistics
-            </Text>
+            <Text style={[styles.sectionTitle, { fontFamily: 'Gilroy-Black' }]}>RESUMEN</Text>
             
             <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <GameController size={24} color="#4f46e5" weight="bold" />
+              <FadeInView from="bottom" delay={250} style={styles.statCard}>
+                <GameControllerIcon size={24} color="#4f46e5" weight="fill" />
                 <Text style={[styles.statNumber, { fontFamily: 'Digitalt' }]}>
-                  {USER_1.gamesPlayed}
+                  {gamesPlayed}
                 </Text>
                 <Text style={[styles.statLabel, { fontFamily: 'Gilroy-Black' }]}>
-                  Games Played
+                  Partidas Jugadas
                 </Text>
-              </View>
+              </FadeInView>
               
-              <View style={styles.statCard}>
-                <Percent size={24} color="#22c55e" weight="bold" />
+              <FadeInView from="bottom" delay={300} style={styles.statCard}>
+                <PercentIcon size={24} color="#22c55e" weight="bold" />
                 <Text style={[styles.statNumber, { fontFamily: 'Digitalt' }]}>
-                  {USER_1.winRate}%
+                  {winRate}%
                 </Text>
                 <Text style={[styles.statLabel, { fontFamily: 'Gilroy-Black' }]}>
-                  Win Rate
+                  Porcentaje de Victorias
                 </Text>
-              </View>
+              </FadeInView>
             </View>
           </View>
+          </FadeInView>
 
-          {/* Achievements Section */}
-          <View style={styles.achievementsSection}>
-            <Text style={[styles.sectionTitle, { fontFamily: 'Gilroy-Black' }]}>
-              Achievements
-            </Text>
-            
-            <View style={styles.achievementsList}>
-              <View style={styles.achievementItem}>
-                <View style={styles.achievementIcon}>
-                  <Fire size={20} color="#f97316" weight="fill" />
-                </View>
-                <View style={styles.achievementContent}>
-                  <Text style={[styles.achievementTitle, { fontFamily: 'Digitalt' }]}>
-                    First Victory
-                  </Text>
-                  <Text style={[styles.achievementDesc, { fontFamily: 'Gilroy-Black' }]}>
-                    Win your first match
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.achievementItem}>
-                <View style={styles.achievementIcon}>
-                  <Lightning size={20} color="#eab308" weight="fill" />
-                </View>
-                <View style={styles.achievementContent}>
-                  <Text style={[styles.achievementTitle, { fontFamily: 'Digitalt' }]}>
-                    Speed Demon
-                  </Text>
-                  <Text style={[styles.achievementDesc, { fontFamily: 'Gilroy-Black' }]}>
-                    Answer 5 questions in under 10 seconds
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={[styles.achievementItem, styles.achievementLocked]}>
-                <View style={styles.achievementIcon}>
-                  <Lock size={20} color="#6b7280" weight="fill" />
-                </View>
-                <View style={styles.achievementContent}>
-                  <Text style={[styles.achievementTitle, styles.achievementTitleLocked, { fontFamily: 'Digitalt' }]}>
-                    Math Master
-                  </Text>
-                  <Text style={[styles.achievementDesc, styles.achievementDescLocked, { fontFamily: 'Gilroy-Black' }]}>
-                    Win 10 matches in a row
-                  </Text>
-                </View>
-              </View>
+          {/* Recent Match Section */}
+          <FadeInView from="bottom" delay={300}>
+          <View style={styles.recentSection}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[styles.sectionTitle, { fontFamily: 'Gilroy-Black' }]}>PARTIDAS RECIENTES</Text>
+              <TouchableOpacity style={styles.chevronButton} onPress={() => setIsRecentOpen(true)}>
+                <CaretRightIcon size={20} color="#fff" weight="fill" />
+              </TouchableOpacity>
             </View>
+            {recentMatch ? (
+              <FadeInView from="bottom" delay={350} style={styles.recentItem}>
+                <View style={styles.recentIconWrap}>
+                  <GameControllerIcon size={18} color="#fff" weight="fill" />
+                </View>
+                <View style={styles.recentContent}>
+                  <Text style={[styles.recentTitle, { fontFamily: 'Digitalt' }]}>@{recentMatch.opponentUsername}</Text>
+                  <Text style={[styles.recentSubtitle, { fontFamily: 'Gilroy-Black' }]}>({recentMatch.opponentPoints})</Text>
+                </View>
+                <View style={styles.recentMeta}>
+                  <View style={styles.recentDate}>
+                    <CalendarBlankIcon size={16} color="#ffffff" weight="fill" />
+                    <Text style={[styles.recentDateText, { fontFamily: 'Gilroy-Black' }]}>
+                      {formatDateShort(recentMatch.created_at)}
+                    </Text>
+                  </View>
+                  <View style={[styles.resultChip, recentMatch.didWin ? styles.resultWin : styles.resultLoss]}>
+                    <Text style={[styles.resultChipText, { fontFamily: 'Digitalt' }]}>{recentMatch.didWin ? 'W' : 'L'}</Text>
+                  </View>
+                </View>
+              </FadeInView>
+            ) : (
+              <Text style={[styles.emptyRecentText, { fontFamily: 'Gilroy-Black' }]}>No hay partidas recientes</Text>
+            )}
           </View>
+          </FadeInView>
 
           {/* Logout Section */}
           <View style={styles.logoutSection}>
@@ -211,7 +246,7 @@ export default function UserScreen() {
               onPress={handleLogout}
               activeOpacity={0.8}
             >
-              <SignOut size={20} color="#ef4444" weight="bold" />
+              <SignOutIcon size={20} color="#ef4444" weight="bold" />
               <Text style={[styles.logoutText, { fontFamily: 'Digitalt' }]}>
                 CERRAR SESIÓN
               </Text>
@@ -219,6 +254,55 @@ export default function UserScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+      {/* Full Screen Modal: All Recent Games */}
+      <Modal
+        visible={isRecentOpen}
+        animationType="none"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setIsRecentOpen(false)}
+      >
+        <SafeAreaView style={styles.fullModalContainer}>
+          <View style={styles.fullModalHeader}>
+            <Text style={[styles.sheetTitle, { fontFamily: 'Gilroy-Black' }]}>Partidas recientes</Text>
+            <TouchableOpacity style={styles.fullModalCloseButton} onPress={() => setIsRecentOpen(false)} activeOpacity={0.8}>
+              <Text style={[styles.fullModalCloseText, { fontFamily: 'Digitalt' }]}>CERRAR</Text>
+            </TouchableOpacity>
+          </View>
+          {!isRecentReady ? (
+            <View style={styles.fullModalLoading}>
+              <ActivityIndicator size="large" color="#ffffff" />
+            </View>
+          ) : (
+            <FadeInView from="bottom" delay={0} style={{ flex: 1 }}>
+              <FlatList
+                data={recentMatches}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.sheetListContent}
+                renderItem={({ item, index }) => (
+                  <FadeInView from="bottom" delay={index * 60} style={styles.sheetItem}>
+                    <View style={styles.recentIconWrap}>
+                      <GameControllerIcon size={18} color="#fff" weight="fill" />
+                    </View>
+                    <View style={styles.recentContent}>
+                      <Text style={[styles.recentTitle, { fontFamily: 'Digitalt' }]}>@{item.opponentUsername}</Text>
+                      <Text style={[styles.recentSubtitle, { fontFamily: 'Gilroy-Black' }]}>({item.opponentPoints})</Text>
+                    </View>
+                    <View style={styles.recentMeta}>
+                      <View style={styles.recentDate}>
+                        <CalendarBlankIcon size={16} color="#ffffff" weight="fill" />
+                        <Text style={[styles.recentDateText, { fontFamily: 'Gilroy-Black' }]}>{formatDateShort(item.created_at)}</Text>
+                      </View>
+                      <View style={[styles.resultChip, item.didWin ? styles.resultWin : styles.resultLoss]}>
+                        <Text style={[styles.resultChipText, { fontFamily: 'Digitalt' }]}>{item.didWin ? 'W' : 'L'}</Text>
+                      </View>
+                    </View>
+                  </FadeInView>
+                )}
+              />
+            </FadeInView>
+          )}
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 }
@@ -330,7 +414,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   userEmail: {
-    color: '#9ca3af',
+    color: 'rgba(255, 255, 255, 0.5)',
     fontSize: 14,
     fontWeight: 'normal',
     marginBottom: 15,
@@ -381,6 +465,157 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     fontSize: 12,
     textAlign: 'center',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  chevronButton: {
+    padding: 6,
+    borderRadius: 14,
+  },
+  recentSection: {
+    paddingHorizontal: 30,
+    paddingBottom: 30,
+  },
+  recentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 15,
+    padding: 12,
+    gap: 12,
+  },
+  recentIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recentContent: {
+    flex: 1,
+  },
+  recentTitle: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  recentSubtitle: {
+    color: '#9ca3af',
+    fontSize: 12,
+  },
+  recentMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  recentDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginRight: 6,
+  },
+  recentDateText: {
+    color: '#ffffff',
+    opacity: 0.9,
+    fontSize: 12,
+  },
+  resultChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  resultChipText: {
+    color: '#000',
+    fontSize: 12,
+  },
+  resultWin: {
+    backgroundColor: '#22c55e',
+  },
+  resultLoss: {
+    backgroundColor: '#ef4444',
+  },
+  emptyRecentText: {
+    color: '#9ca3af',
+    fontSize: 12,
+  },
+  sheetOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  sheetContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#3b2ac5',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 24,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 48,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginBottom: 12,
+  },
+  sheetTitle: {
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  fullModalContainer: {
+    flex: 1,
+    backgroundColor: '#3b2ac5',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 24,
+  },
+  fullModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  fullModalCloseButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  fullModalCloseText: {
+    color: '#fff',
+    fontSize: 12,
+    letterSpacing: 1,
+  },
+  fullModalLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetListContent: {
+    paddingBottom: 12,
+    gap: 8,
+  },
+  sheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    gap: 12,
   },
   achievementsSection: {
     paddingHorizontal: 30,

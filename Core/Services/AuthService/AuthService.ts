@@ -199,6 +199,37 @@ class AuthService {
   }
 
   /**
+   * Get gameplay stats for a profile
+   */
+  async getUserStats(profileId: string): Promise<{ gamesPlayed: number; wins: number; winRate: number }> {
+    // Count total games where the user participated
+    const { count: totalGames, error: totalGamesError } = await this.supabase
+      .from('matches')
+      .select('id', { count: 'exact', head: true })
+      .or(`player1_id.eq.${profileId},player2_id.eq.${profileId}`);
+
+    if (totalGamesError) {
+      throw totalGamesError;
+    }
+
+    // Count total wins where the user is the winner
+    const { count: totalWins, error: totalWinsError } = await this.supabase
+      .from('matches')
+      .select('id', { count: 'exact', head: true })
+      .eq('winner_id', profileId);
+
+    if (totalWinsError) {
+      throw totalWinsError;
+    }
+
+    const gamesPlayed = totalGames || 0;
+    const wins = totalWins || 0;
+    const winRate = gamesPlayed > 0 ? Math.round((wins / gamesPlayed) * 100) : 0;
+
+    return { gamesPlayed, wins, winRate };
+  }
+
+  /**
    * Clear all authentication data
    */
   async clearAuthData(): Promise<void> {

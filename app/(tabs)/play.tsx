@@ -1,15 +1,16 @@
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
-import React from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { LayeredAvatar } from '@/components/LayeredAvatar';
 import AnimatedMathBackground from '@/components/ui/AnimatedMathBackground';
 import GameModeButton from '@/components/ui/GameModeButton';
+import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useFontContext } from '@/contexts/FontsContext';
+import { getUserRankInfo, UserRankInfo } from '@/services/SupabaseService';
 
 const { height } = Dimensions.get('window');
 
@@ -23,6 +24,27 @@ export default function PlayScreen() {
   const { fontsLoaded } = useFontContext();
 
   const { avatar: userAvatar } = useAvatar();
+  const { user } = useAuth();
+
+  const [rankInfo, setRankInfo] = useState<UserRankInfo | null>(null);
+  const [rankLoading, setRankLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchRank = async () => {
+      if (!user?.id) return;
+      setRankLoading(true);
+      const info = await getUserRankInfo(user.id);
+      setRankInfo(info);
+      setRankLoading(false);
+    };
+    fetchRank();
+  }, [user?.id]);
+
+  const rankColor = useMemo(() => {
+    const color = rankInfo?.rank?.color || '#A855F7';
+    // Ensure color is a hex or valid CSS color, else fallback
+    return color || '#A855F7';
+  }, [rankInfo]);
 
   if (!fontsLoaded) {
     return (
@@ -35,28 +57,48 @@ export default function PlayScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#A855F7', '#7C3AED']}
+        colors={[rankColor, '#8A56FE']}
         style={styles.gradientBackground}
       />
       <AnimatedMathBackground />
 
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-        {/* Top-right avatar + coins */}
-        <View style={styles.topBar}>
-          <View style={styles.avatarBlock}>
-            <View style={styles.avatarCircle}>
-              <LayeredAvatar avatar={userAvatar} size={64} style={styles.layeredAvatar} />
-            </View>
-            <View style={styles.coinsRow}>
-              <FontAwesome5 name="coins" size={16} color="#FFD45E" />
-              <Text style={styles.coinsText}>300</Text>
-            </View>
-          </View>
-        </View>
 
         {/* Center title */}
         <View style={styles.titleWrap}>
-          <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>SELECCIONA{"\n"}MODO DE JUEGO!</Text>
+          <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>COMPETITIVO</Text>
+        </View>
+
+        {/* Rank banner + progress */}
+        <View style={styles.rankWrap}>
+          <View style={styles.rankBadge}>
+            {rankInfo?.rank?.icon_url ? (
+              <Image source={{ uri: rankInfo.rank.icon_url }} style={styles.rankIcon} resizeMode="contain" />
+            ) : (
+              <FontAwesome5 name="medal" size={22} color="#fff" />
+            )}
+            <Text style={[styles.rankName, { fontFamily: 'Digitalt' }]}>
+              {rankLoading ? 'Cargando…' : (rankInfo?.rank?.name ?? 'Sin rango')}
+            </Text>
+            <Text style={[styles.rankPoints, { fontFamily: 'Gilroy-Black' }]}>
+              {rankInfo?.points ?? 0} pts
+            </Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${Math.round((rankInfo?.progressPercent ?? 0) * 100)}%`, backgroundColor: rankColor },
+              ]}
+            />
+          </View>
+          <Text style={[styles.nextRankText, { fontFamily: 'Gilroy-Black' }]}>
+            {rankLoading
+              ? 'Calculando siguiente rango…'
+              : rankInfo?.nextRank
+                ? `Siguiente: ${rankInfo.nextRank.name} • Faltan ${rankInfo.pointsToNext} pts`
+                : 'Rango máximo alcanzado'}
+          </Text>
         </View>
 
 
@@ -66,7 +108,7 @@ export default function PlayScreen() {
 
           <GameModeButton
             name="COMPETITIVO!"
-            route="/(games)/matchmaking-game"
+            route="/(games)/matchmaking-screen"
             gradientColors={["#FF6A6A", "#FF3D3D"]}
             imagePath={require('@/assets/images/competitive/1v1_roulette.png')}
             onPress={() => router.push('/(games)/matchmaking-screen')}
@@ -139,6 +181,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     alignItems: 'flex-end',
+  },
+  rankWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    gap: 8,
+    marginTop: height * 0.12,
+  },
+  rankBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    borderRadius: 0,
+    borderWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  rankName: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  rankPoints: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 14,
+  },
+  rankIcon: {
+    width: 28,
+    height: 28,
+  },
+  progressTrack: {
+    height: 10,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 6,
+  },
+  nextRankText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 12,
   },
   avatarBlock: {
     alignItems: 'center',

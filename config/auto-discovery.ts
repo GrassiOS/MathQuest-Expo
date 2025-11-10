@@ -15,6 +15,8 @@ class ServerDiscovery {
 
   // Rangos de IP comunes para buscar
   private readonly COMMON_RANGES = [
+
+    '10.41.13.254',
     //'10.41.7.181',
     //'192.168.1.227', // IP actual detectada
     '192.168.1.234', // FOG 5G
@@ -31,7 +33,8 @@ class ServerDiscovery {
 
   // IPs específicas conocidas
   private readonly KNOWN_IPS = [
-    //'10.41.7.181',
+    '10.41.13.254',
+    '10.41.7.181', // UABC 5G
     '192.168.1.234', // FOG 5G
     '192.168.1.227', // FOG 2.4
     '192.168.100.246',  // IP actual detectada

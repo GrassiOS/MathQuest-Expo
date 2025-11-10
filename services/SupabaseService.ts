@@ -235,3 +235,42 @@ export async function getUserRankInfo(userId: string): Promise<UserRankInfo | nu
     return null;
   }
 }
+
+export async function getUserElo(userId: string, ifWin: boolean): Promise<{ elo: number; beforeElo: number } | null> {
+  try {
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('points')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (profileError) throw profileError;
+
+    // Use "points" as ELO-like metric
+    const elo = Math.max(0, Number(profile?.points ?? 0));
+
+    // Compute beforeElo based on match result and server policy
+    // Winner: +30, Loser: -25 (see server/WEBSOCKET_MESSAGES.md)
+    const delta = ifWin ? 30 : -25;
+    const beforeElo = Math.max(0, elo - delta);
+
+    // Debug logs
+    console.log('[ELO] getUserElo()', {
+      userId,
+      result: ifWin ? 'WIN' : 'LOSS',
+      fetchedPoints: elo,
+      computedBeforeElo: beforeElo,
+      appliedDelta: delta,
+    });
+
+    return {
+      elo,
+      beforeElo,
+    };
+  }
+  catch (error) {
+    console.error('Error fetching user elo:', error);
+    return null;
+  }
+
+}

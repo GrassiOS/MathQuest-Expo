@@ -2,7 +2,8 @@
 export const NETWORK_CONFIG = {
   // IPs comunes para probar (se detectará automáticamente)
   COMMON_IPS: [
-    //'10.41.7.181', //UABC 5G
+    '10.41.13.254',
+    '10.41.7.181', //UABC 5G
     '192.168.1.227', // IP actual detectada (PRIMERA PRIORIDAD)
     '192.168.1.234', // FOG 5G
     '192.168.100.246',   // IP actual detectada (PRIMERA PRIORIDAD)

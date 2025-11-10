@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useFontContext } from '@/contexts/FontsContext';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { getUserElo } from '@/services/SupabaseService';
 import LottieView from 'lottie-react-native';
 
 type GameState = 'MATCHMAKING' | 'MATCH_FOUND' | 'ROULETTE' | 'QUIZ' | 'ROUND_RESULT' | 'MATCH_END';
@@ -87,6 +88,7 @@ export default function MatchmakingScreen() {
   const [isExitingMatchmaking, setIsExitingMatchmaking] = useState(false);
   const [isExitingMatchFound, setIsExitingMatchFound] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<{ id: string; name: string; emoji: string; color: string } | undefined>(undefined);
+  const [eloInfo, setEloInfo] = useState<{ currentElo: number; beforeElo: number } | null>(null);
 
   // Quiz state
   type Exercise = { id: string; question: string; answer: number; options?: number[]; category: string; startTime?: number };
@@ -171,6 +173,39 @@ export default function MatchmakingScreen() {
       setGameState('MATCH_END');
     });
   }, [onGameFinished]);
+
+  // When entering MATCH_END, fetch ELO info and prepare animation data
+  useEffect(() => {
+    const fetchElo = async () => {
+      try {
+        const didWin = gameData?.winner ? gameData?.winner === socketId : false;
+        const uid = user?.id;
+        if (!uid) {
+          setEloInfo(null);
+          return;
+        }
+        const info = await getUserElo(uid, didWin);
+        if (info) {
+          const payload = { currentElo: Math.max(0, info.elo), beforeElo: Math.max(0, info.beforeElo) };
+          console.log('[ELO] MATCH_END fetched:', {
+            didWin,
+            currentElo: payload.currentElo,
+            beforeElo: payload.beforeElo,
+          });
+          setEloInfo(payload);
+        } else {
+          setEloInfo(null);
+        }
+      } catch {
+        setEloInfo(null);
+      }
+    };
+    if (gameState === 'MATCH_END') {
+      fetchElo();
+    } else {
+      setEloInfo(null);
+    }
+  }, [gameState, gameData?.winner, socketId, user?.id]);
 
   // Listen to per-answer result to advance locally
   useEffect(() => {
@@ -271,13 +306,12 @@ export default function MatchmakingScreen() {
     await runParallel([
       Animated.timing(circleTranslateY, { toValue: height * 0.9, duration: 600, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
       Animated.timing(circleScale, { toValue: 0.08, duration: 600, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(bgOpacity, { toValue: 0, duration: 600, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
       Animated.timing(whiteScale, { toValue: 0, duration: 300, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
     ]);
 
     // Cleanup
     setIsTransitioningToQuiz(false);
-    bgOpacity.setValue(0);
+    bgOpacity.setValue(0); // Hide instantly after overlay is removed to avoid flashing underlying content
     bgTranslateY.setValue(0);
     contentTranslateY.setValue(0);
     circleScale.setValue(0.1);
@@ -394,15 +428,27 @@ export default function MatchmakingScreen() {
         );
       case 'ROULETTE':
         return (
-          <RouletteView
-            selectedCategory={selectedCategory}
-            onSpinComplete={() => {
-              // Ensure exercises are loaded before entering the quiz
-              if (exercises.length >= 6) {
-                startRouletteToQuizTransition();
-              }
-            }}
-          />
+          <View style={styles.rouletteStage}>
+            <RouletteView
+              selectedCategory={selectedCategory}
+              me={{
+                username: (gameData?.player1Username || myUsername || 'P1').toString(),
+                avatarComponent: <LayeredAvatar avatar={avatar} size={56} />,
+                score: gameData?.player1Score ?? 0,
+              }}
+              opponent={{
+                username: (gameData?.player2Username || opponent?.username || 'P2').toString(),
+                avatarComponent: <LayeredAvatar avatar={avatar} size={56} />,
+                score: gameData?.player2Score ?? 0,
+              }}
+              onSpinComplete={() => {
+                // Ensure exercises are loaded before entering the quiz
+                if (exercises.length >= 6) {
+                  startRouletteToQuizTransition();
+                }
+              }}
+            />
+          </View>
         );
       case 'QUIZ':
         return (
@@ -441,6 +487,7 @@ export default function MatchmakingScreen() {
             player1TotalScore={gameData?.player1TotalScore ?? 0}
             player2TotalScore={gameData?.player2TotalScore ?? 0}
             pointsDelta={(gameData?.winner === socketId ? gameData?.globalPointsUpdate?.winner : gameData?.globalPointsUpdate?.loser) ?? 0}
+            eloInfo={eloInfo || undefined}
             onExit={handleExitMatchEnd}
           />
         );
@@ -541,6 +588,7 @@ export default function MatchmakingScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safe: { flex: 1 },
+  rouletteStage: { flex: 1 },
   gradientBackground: {
     position: 'absolute',
     left: 0,

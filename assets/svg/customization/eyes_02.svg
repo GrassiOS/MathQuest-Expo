@@ -1,13 +1,15 @@
 <svg width="288" height="359" viewBox="0 0 288 359" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g clip-path="url(#clip0_156_361)">
-<path d="M112 130.5L117.073 128.411C119.268 127.507 121.732 127.507 123.927 128.411L129 130.5" stroke="black" stroke-width="4" stroke-linecap="round"/>
-<path d="M162 130.5L167.073 128.411C169.268 127.507 171.732 127.507 173.927 128.411L179 130.5" stroke="black" stroke-width="4" stroke-linecap="round"/>
-<rect x="116" y="136" width="9" height="21" rx="4" fill="black"/>
-<rect x="166" y="136" width="9" height="21" rx="4" fill="black"/>
+<g clip-path="url(#clip0_345_580)">
+<path d="M113 113H141V126C141 133.732 134.732 140 127 140C119.268 140 113 133.732 113 126V113Z" fill="white"/>
+<path d="M145 113H173V126C173 133.732 166.732 140 159 140C151.268 140 145 133.732 145 126V113Z" fill="white"/>
+<path d="M136.462 113.162L136.462 124.205C136.462 127.094 134.12 129.436 131.231 129.436C128.342 129.436 126 127.094 126 124.205L126 113.162L136.462 113.162Z" fill="black"/>
+<path d="M168.462 113.162L168.462 124.205C168.462 127.094 166.12 129.436 163.231 129.436C160.342 129.436 158 127.094 158 124.205L158 113.162L168.462 113.162Z" fill="black"/>
+<path d="M137 113L137 117.5C137 118.881 135.881 120 134.5 120C133.119 120 132 118.881 132 117.5L132 113L137 113Z" fill="white"/>
+<path d="M169 113L169 117.5C169 118.881 167.881 120 166.5 120C165.119 120 164 118.881 164 117.5L164 113L169 113Z" fill="white"/>
 </g>
 <defs>
-<clipPath id="clip0_156_361">
-<rect width="98" height="60" fill="white" transform="translate(95 108)"/>
+<clipPath id="clip0_345_580">
+<rect width="98" height="60" fill="white" transform="translate(95 91)"/>
 </clipPath>
 </defs>
 </svg>

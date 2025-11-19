@@ -15,6 +15,7 @@ class ServerDiscovery {
 
   // Rangos de IP comunes para buscar
   private readonly COMMON_RANGES = [
+    '10.41.141.145', //UABC 5G Valle Dorado
 
     '10.41.13.254',
     //'10.41.7.181',
@@ -33,6 +34,7 @@ class ServerDiscovery {
 
   // IPs específicas conocidas
   private readonly KNOWN_IPS = [
+    '10.41.141.145', //UABC 5G Valle Dorado
     '10.41.13.254',
     '10.41.7.181', // UABC 5G
     '192.168.1.234', // FOG 5G

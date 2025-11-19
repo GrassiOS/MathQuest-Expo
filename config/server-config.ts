@@ -1,6 +1,7 @@
 // Configuración temporal del servidor - ACTUALIZAR ESTA IP
 export const SERVER_CONFIG = {
   // CAMBIAR ESTA IP POR LA ACTUAL DE TU COMPUTADORA
+  
   SERVER_IP: '10.41.21.217',
   PORT: 3001,
   

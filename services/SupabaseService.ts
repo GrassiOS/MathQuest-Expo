@@ -274,3 +274,60 @@ export async function getUserElo(userId: string, ifWin: boolean): Promise<{ elo:
   }
 
 }
+
+// -------------------- STORE (TIENDA) --------------------
+export type StoreItemRow = {
+  id: number;
+  nombre: string;
+  categoria: string;
+  calidad?: string | null;
+  precio: number;
+  imagen?: string | null;
+  imagen_tienda?: string | null; // PNG to be used as "store_image"
+};
+
+/**
+ * Fetches items from 'tienda' table. Optionally filter by category.
+ */
+export async function getStoreItems(category?: string): Promise<StoreItemRow[]> {
+  try {
+    let query = supabase
+      .from('tienda')
+      .select('id, nombre, categoria, calidad, precio, imagen, imagen_tienda');
+    if (category) {
+      query = query.eq('categoria', category);
+    }
+    const { data, error } = await query.order('id', { ascending: true });
+    if (error) {
+      console.error('Error fetching store items:', error);
+      return [];
+    }
+    return (data || []) as StoreItemRow[];
+  } catch (error) {
+    console.error('Error fetching store items:', error);
+    return [];
+  }
+}
+
+/**
+ * Returns the current authenticated user's coin balance from profiles.coins.
+ */
+export async function getCurrentUserCoins(): Promise<number> {
+  try {
+    const { data: authData } = await supabase.auth.getUser();
+    const userId = authData?.user?.id ?? null;
+    if (!userId) return 0;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('coins')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    const raw = data?.coins;
+    const coins = Number(raw ?? 0);
+    return Number.isFinite(coins) ? coins : 0;
+  } catch (error) {
+    console.error('Error fetching user coins:', error);
+    return 0;
+  }
+}

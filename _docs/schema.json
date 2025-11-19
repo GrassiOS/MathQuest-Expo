@@ -1,0 +1,418 @@
+[
+    {
+      "table_schema": "public",
+      "table_name": "avatars",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "avatars",
+      "column_name": "profile_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "avatars",
+      "column_name": "skin_asset",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "avatars",
+      "column_name": "hair_asset",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "avatars",
+      "column_name": "eyes_asset",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "avatars",
+      "column_name": "mouth_asset",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "avatars",
+      "column_name": "clothes_asset",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "avatars",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "avatars",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "inventario",
+      "column_name": "id",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "nextval('inventario_id_seq'::regclass)"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "inventario",
+      "column_name": "usuario_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "inventario",
+      "column_name": "producto_id",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "inventario",
+      "column_name": "adquirido_en",
+      "data_type": "timestamp without time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "matches",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "matches",
+      "column_name": "player1_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "matches",
+      "column_name": "player2_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "matches",
+      "column_name": "winner_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "matches",
+      "column_name": "rounds_played",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "0"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "matches",
+      "column_name": "player1_points",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "0"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "matches",
+      "column_name": "player2_points",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "0"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "matches",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'in_progress'::text"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "matches",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "matches",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "profiles",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "profiles",
+      "column_name": "username",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "profiles",
+      "column_name": "email",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "profiles",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "profiles",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "profiles",
+      "column_name": "points",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "0"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "profiles",
+      "column_name": "rank_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "profiles",
+      "column_name": "last_rank_update",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "profiles",
+      "column_name": "coins",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "0"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "ranks",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "ranks",
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "ranks",
+      "column_name": "min_points",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "ranks",
+      "column_name": "max_points",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "ranks",
+      "column_name": "icon_url",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "ranks",
+      "column_name": "color",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "ranks",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "tienda",
+      "column_name": "id",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "nextval('tienda_id_seq'::regclass)"
+    },
+    {
+      "table_schema": "public",
+      "table_name": "tienda",
+      "column_name": "nombre",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "tienda",
+      "column_name": "categoria",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "tienda",
+      "column_name": "calidad",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "tienda",
+      "column_name": "precio",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "tienda",
+      "column_name": "imagen",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "tienda",
+      "column_name": "imagen_tienda",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "user_profiles",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "user_profiles",
+      "column_name": "username",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "user_profiles",
+      "column_name": "email",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "user_profiles",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "user_profiles",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_schema": "public",
+      "table_name": "user_profiles",
+      "column_name": "last_sign_in_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    }
+  ]

@@ -1,7 +1,9 @@
 import { avatarAssets } from '@/constants/avatarAssets';
 import { Avatar } from '@/types/avatar';
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import { SvgUri } from 'react-native-svg';
 
 interface LayeredAvatarProps {
   avatar: Avatar;
@@ -9,41 +11,71 @@ interface LayeredAvatarProps {
   style?: any;
 }
 
+const RemoteSvgLayer: React.FC<{ uri: string; size: number }> = ({ uri, size }) => {
+  const [localUri, setLocalUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        // Prepare cache directory
+        const dir = FileSystem.cacheDirectory ? `${FileSystem.cacheDirectory}svgs/` : null;
+        if (!dir) {
+          // Fallback to direct URI usage
+          if (mounted) setLocalUri(uri);
+          return;
+        }
+        await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
+        const safeName = encodeURIComponent(uri).slice(0, 200);
+        const fileUri = `${dir}${safeName}.svg`;
+        const info = await FileSystem.getInfoAsync(fileUri);
+        if (!info.exists) {
+          await FileSystem.downloadAsync(uri, fileUri);
+        }
+        if (mounted) setLocalUri(fileUri);
+      } catch {
+        if (mounted) setLocalUri(uri); // use network URI as fallback
+      }
+    })();
+    return () => { mounted = false; };
+  }, [uri]);
+
+  if (!localUri) return null;
+  return <SvgUri uri={localUri} width={size} height={size} />;
+};
+
+function isRemoteSvg(value: string | undefined): value is string {
+  if (!value) return false;
+  const v = String(value);
+  return v.startsWith('http://') || v.startsWith('https://') || v.startsWith('file://') || /\.svg(\?|#|$)/i.test(v) || v.includes('/');
+}
+
 export const LayeredAvatar: React.FC<LayeredAvatarProps> = ({
   avatar,
   size = 120,
   style,
 }) => {
-  const renderLayer = (assetKey: string | undefined, category: keyof typeof avatarAssets) => {
-    if (!assetKey || assetKey === 'none' || !avatarAssets[category][assetKey]) {
-      return null;
-    }
-
-    const SvgComponent = avatarAssets[category][assetKey];
-    
-    // Handle null components (for "none" options)
-    if (!SvgComponent) {
-      return null;
-    }
-    
-    return (
-      <View key={`${category}-${assetKey}`} style={styles.layer}>
-        <SvgComponent 
-          width={size} 
-          height={size} 
-        />
-      </View>
-    );
-  };
+  const layers = useMemo(() => ([
+    ['skin', avatar.skin_asset],
+    ['hair', avatar.hair_asset],
+    ['eyes', avatar.eyes_asset],
+    ['mouth', avatar.mouth_asset],
+    ['clothes', avatar.clothes_asset],
+  ] as Array<[keyof typeof avatarAssets, string | undefined]>), [avatar]);
 
   return (
     <View style={[styles.container, { width: size, height: size }, style]}>
-      {/* Layer order is important - render from back to front */}
-      {renderLayer(avatar.skin_asset, 'skin')}
-      {renderLayer(avatar.hair_asset, 'hair')}
-      {renderLayer(avatar.eyes_asset, 'eyes')}
-      {renderLayer(avatar.mouth_asset, 'mouth')}
-      {renderLayer(avatar.clothes_asset, 'clothes')}
+      {layers.map(([category, value]) => {
+        if (!value || value === 'none') return null;
+        const LocalComp = avatarAssets[category][value as any];
+        return (
+          <View key={`${category}-${value}`} style={styles.layer}>
+            {LocalComp
+              ? <LocalComp width={size} height={size} />
+              : (isRemoteSvg(value) ? <RemoteSvgLayer uri={value} size={size} /> : null)}
+          </View>
+        );
+      })}
     </View>
   );
 };

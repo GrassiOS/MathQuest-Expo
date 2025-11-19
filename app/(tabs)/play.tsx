@@ -116,7 +116,7 @@ export default function PlayScreen() {
         </View>
       </SafeAreaView>
       {/* Floating Leaderboard button to new screen */}
-      <Link href="/(games)/leaderboard" asChild>
+      <Link href="/(modals)/leaderboard" asChild>
         <TouchableOpacity
           style={styles.fab}
           onPress={() => {
@@ -125,7 +125,7 @@ export default function PlayScreen() {
         >
           <LinearGradient colors={["#FFD45E", "#FFA500"]} style={styles.fabGradient}>
             <FontAwesome5 name="trophy" size={18} color="#fff" />
-            <Text style={styles.fabText}>Tabla</Text>
+            <Text style={styles.fabText}>Clasificación</Text>
           </LinearGradient>
         </TouchableOpacity>
       </Link>

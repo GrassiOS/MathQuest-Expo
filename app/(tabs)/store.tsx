@@ -27,11 +27,12 @@ import { FadeInView } from '@/components/shared/FadeInView';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useFontContext } from '@/contexts/FontsContext';
 import { useItemStore } from '@/hooks/useItemStore';
+import { incrementCurrentUserCoins, getUserInventoryProductIds, purchaseStoreItem } from '@/services/SupabaseService';
 
 export default function StoreScreen() {
   const { fontsLoaded } = useFontContext();
   const { avatar: userAvatar } = useAvatar();
-  const { items: allItems, coins, setCoins } = useItemStore();
+  const { items: allItems, isLoadingItems, coins, setCoins, refreshCoins } = useItemStore();
 
   const [selectedCategory, setSelectedCategory] = React.useState<
     'skin' | 'hair' | 'eyes' | 'mouth' | 'clothes'
@@ -71,6 +72,17 @@ export default function StoreScreen() {
   const CARD_HEIGHT = CARD_SIZE + 16; // slightly taller than width
   const TOP_SECTION_HEIGHT = height * 0.32; // reduced ~40% from previous
   const CARD_RADIUS = 24;
+  const [ownedProductIds, setOwnedProductIds] = React.useState<number[]>([]);
+
+  const refreshOwned = React.useCallback(async () => {
+    const ids = await getUserInventoryProductIds();
+    setOwnedProductIds(ids);
+  }, []);
+
+  React.useEffect(() => {
+    // Load owned items initially
+    refreshOwned();
+  }, [refreshOwned]);
 
   const categories: {
     key: 'skin' | 'hair' | 'eyes' | 'mouth' | 'clothes';
@@ -96,11 +108,27 @@ export default function StoreScreen() {
       }));
   }, [allItems, selectedCategory]);
 
+  const handleDebugAddCoins = React.useCallback(async () => {
+    try {
+      const newAmount = await incrementCurrentUserCoins(500);
+      setCoins(newAmount);
+    } catch (err) {
+      // Fallback to server value if increment failed
+      try {
+        await (refreshCoins?.());
+      } catch {
+        // ignore secondary failure
+      }
+    }
+  }, [refreshCoins, setCoins]);
+
     const renderItem = ({ item, index }: { item: { id: string; SvgComp: any; price: number; thumbnail?: any }, index: number }) => {
       const CategoryIcon = categories.find(c => c.key === selectedCategory)?.Icon || EyeIcon;
       const SvgIcon = item.SvgComp;
       const imgSource = item.thumbnail;
       const categoryLabel = categories.find(c => c.key === selectedCategory)?.label ?? '';
+      const numericId = Number(item.id);
+      const isOwned = ownedProductIds.includes(numericId);
 
       return (
         <TouchableOpacity
@@ -143,6 +171,11 @@ export default function StoreScreen() {
             {item.price}
           </Text>
         </View>
+        {isOwned && (
+          <View pointerEvents="none" style={styles.purchasedOverlay}>
+            <Text style={styles.purchasedText}>COMPRADO!</Text>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
@@ -170,10 +203,10 @@ export default function StoreScreen() {
               </View>
             </View>
             <View style={styles.headerRight}>
-              <View style={styles.coinsPill}>
+              <TouchableOpacity onPress={handleDebugAddCoins} activeOpacity={0.8} style={styles.coinsPill}>
                 <Image source={require('@/assets/images/store/MQ-coin.png')} style={styles.coinPng} />
                 <Text style={[styles.coinsText, { fontFamily: 'Digitalt' }]}>{coins}</Text>
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -209,17 +242,23 @@ export default function StoreScreen() {
           </View>
 
           {/* Grid of items: 3 per row */}
-          <FadeInView key={selectedCategory} from="bottom" delay={120} duration={450} style={{ flex: 1 }}>
-            <FlatList
-              data={items}
-              keyExtractor={(it) => it.id}
-              numColumns={3}
-              renderItem={renderItem}
-              columnWrapperStyle={{ justifyContent: 'flex-start' }}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.gridContent}
-            />
-          </FadeInView>
+          {isLoadingItems ? (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: '#fff' }}>Cargando tienda…</Text>
+            </View>
+          ) : (
+            <FadeInView key={`${selectedCategory}-loaded`} from="bottom" delay={120} duration={450} style={{ flex: 1 }}>
+              <FlatList
+                data={items}
+                keyExtractor={(it) => it.id}
+                numColumns={3}
+                renderItem={renderItem}
+                columnWrapperStyle={{ justifyContent: 'flex-start' }}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.gridContent}
+              />
+            </FadeInView>
+          )}
         </View>
       </SafeAreaView>
       {/* Purchase Modal */}
@@ -253,25 +292,57 @@ export default function StoreScreen() {
             </View>
             <TouchableOpacity
               activeOpacity={0.9}
-              disabled={!selectedItem || coins < (selectedItem?.price ?? 0) || isPurchasing}
+              disabled={
+                !selectedItem ||
+                ownedProductIds.includes(Number(selectedItem?.id)) ||
+                coins < (selectedItem?.price ?? 0) ||
+                isPurchasing
+              }
               onPress={async () => {
                 if (!selectedItem) return;
+                if (ownedProductIds.includes(Number(selectedItem.id))) return;
                 if (coins < selectedItem.price) return;
                 setIsPurchasing(true);
-                // simulate purchase
-                setTimeout(() => {
-                  setCoins(prev => Math.max(0, prev - selectedItem.price));
-                  setSelectedItem(null);
+                try {
+                  const productId = Number(selectedItem.id);
+                  const result = await purchaseStoreItem(productId, selectedItem.price);
+                  if (result.status === 'purchased') {
+                    setCoins(result.coins);
+                    setOwnedProductIds(prev => (prev.includes(productId) ? prev : [...prev, productId]));
+                    setSelectedItem(null);
+                  } else if (result.status === 'already_owned') {
+                    await (refreshCoins?.());
+                    await refreshOwned();
+                    setSelectedItem(null);
+                  } else {
+                    // insufficient funds, keep modal open; UI already shows disabled state when not enough coins
+                  }
+                } catch (e) {
+                  // On any error, refresh server truth
+                  try {
+                    await (refreshCoins?.());
+                    await refreshOwned();
+                  } catch {}
+                } finally {
                   setIsPurchasing(false);
-                }, 900);
+                }
               }}
               style={[
                 styles.buyButton,
-                (!selectedItem || coins < (selectedItem?.price ?? 0) || isPurchasing) && styles.buyButtonDisabled,
+                (
+                  !selectedItem ||
+                  ownedProductIds.includes(Number(selectedItem?.id)) ||
+                  coins < (selectedItem?.price ?? 0) ||
+                  isPurchasing
+                ) && styles.buyButtonDisabled,
               ]}
             >
               <Text style={styles.buyButtonText}>
-                {coins < (selectedItem?.price ?? 0) ? 'SIN MONEDAS' : isPurchasing ? 'COMPRANDO...' : 'COMPRAR!'}
+                {ownedProductIds.includes(Number(selectedItem?.id))
+                  ? 'COMPRADO!'
+                  : (coins < (selectedItem?.price ?? 0)
+                      ? 'SIN MONEDAS'
+                      : (isPurchasing ? 'COMPRANDO...' : 'COMPRAR!'))}
               </Text>
             </TouchableOpacity>
             {isPurchasing && (
@@ -593,5 +664,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     letterSpacing: 1,
+  },
+  purchasedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 22,
+  },
+  purchasedText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    letterSpacing: 1,
+    fontSize: 16,
   },
 });

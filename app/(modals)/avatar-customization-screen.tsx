@@ -2,15 +2,18 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image as ExpoImage } from 'expo-image';
 
 import { LayeredAvatar } from '@/components/LayeredAvatar';
-import { assetKeys, categoryConfig, defaultAvatar } from '@/constants/avatarAssets';
+import { avatarAssets, categoryConfig, defaultAvatar } from '@/constants/avatarAssets';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useFontContext } from '@/contexts/FontsContext';
 import { Avatar, AvatarCategory } from '@/types/avatar';
+import { getStoreItems, getUserInventoryProductIds, StoreItemRow } from '@/services/SupabaseService';
+import { FadeInView } from '@/components/shared/FadeInView';
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,6 +23,9 @@ export default function AvatarCustomizationScreen() {
   const { avatar: currentAvatar, updateAvatar } = useAvatar();
   const [selectedCategory, setSelectedCategory] = useState<AvatarCategory>('skin');
   const [originalAvatar, setOriginalAvatar] = useState<Avatar>(currentAvatar);
+  const [ownedProductIds, setOwnedProductIds] = useState<number[]>([]);
+  const [storeItems, setStoreItems] = useState<StoreItemRow[]>([]);
+  const [loadingInventory, setLoadingInventory] = useState<boolean>(true);
 
   // Update original avatar when component mounts
   useEffect(() => {
@@ -98,40 +104,48 @@ export default function AvatarCustomizationScreen() {
     await updateAvatar(updatedAvatar);
   };
 
-  const getPreviewAvatar = (assetKey: string): Avatar => {
-    const previewAvatar = { ...defaultAvatar };
-    
-    // For better preview visibility, only show the selected category asset
-    // Reset all to 'none' except the category being selected
-    if (selectedCategory !== 'skin') previewAvatar.skin_asset = 'skin01';
-    if (selectedCategory !== 'hair') previewAvatar.hair_asset = 'none';
-    if (selectedCategory !== 'eyes') previewAvatar.eyes_asset = 'eyes01';
-    if (selectedCategory !== 'mouth') previewAvatar.mouth_asset = 'none';
-    if (selectedCategory !== 'clothes') previewAvatar.clothes_asset = 'clothes01';
-    
-    switch (selectedCategory) {
-      case 'skin':
-        previewAvatar.skin_asset = assetKey;
-        // Remove other elements for clearer skin preview
-        previewAvatar.hair_asset = 'none';
-        previewAvatar.mouth_asset = 'none';
-        break;
-      case 'hair':
-        previewAvatar.hair_asset = assetKey;
-        break;
-      case 'eyes':
-        previewAvatar.eyes_asset = assetKey;
-        break;
-      case 'mouth':
-        previewAvatar.mouth_asset = assetKey;
-        break;
-      case 'clothes':
-        previewAvatar.clothes_asset = assetKey;
-        break;
+  // Load owned inventory and store catalog once
+  useEffect(() => {
+    let isActive = true;
+    (async () => {
+      setLoadingInventory(true);
+      try {
+        const [ids, items] = await Promise.all([
+          getUserInventoryProductIds(),
+          getStoreItems(),
+        ]);
+        if (!isActive) return;
+        setOwnedProductIds(ids || []);
+        setStoreItems(items || []);
+      } finally {
+        if (isActive) setLoadingInventory(false);
+      }
+    })();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  type OwnedOption = { id: number; svgUrl: string; storeImage: string | null };
+  const ownedOptionsForSelectedCategory: OwnedOption[] = useMemo(() => {
+    const ownedSet = new Set(ownedProductIds.map(Number));
+    const rows = storeItems.filter(
+      (r) => ownedSet.has(Number(r.id)) && (r.categoria as string) === selectedCategory
+    );
+    const mapped = rows.map((r) => {
+      const svgUrl = String(r.imagen || '').trim();
+      if (!svgUrl) return null;
+      return { id: Number(r.id), svgUrl, storeImage: r.imagen_tienda ?? null } as OwnedOption;
+    }).filter(Boolean) as OwnedOption[];
+
+    // Prepend a "none" option for categories that support it
+    if (avatarAssets[selectedCategory] && Object.prototype.hasOwnProperty.call(avatarAssets[selectedCategory], 'none')) {
+      if (!mapped.some(o => o.svgUrl === 'none')) {
+        mapped.unshift({ id: -1, svgUrl: 'none', storeImage: null });
+      }
     }
-    
-    return previewAvatar;
-  };
+    return mapped;
+  }, [ownedProductIds, storeItems, selectedCategory]);
 
   const getCurrentAssetKey = () => {
     switch (selectedCategory) {
@@ -226,40 +240,59 @@ export default function AvatarCustomizationScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.assetsGrid}>
-              {assetKeys[selectedCategory].map((assetKey, index) => {
-                const isSelected = getCurrentAssetKey() === assetKey;
-                
-                return (
-                  <TouchableOpacity
-                    key={assetKey}
-                    style={[
-                      styles.assetOption,
-                      isSelected && styles.assetOptionSelected
-                    ]}
-                    onPress={() => handleAssetSelect(assetKey)}
-                  >
-                    <View style={styles.assetPreview}>
-                      {assetKey === 'none' ? (
-                        <View style={styles.noneOption}>
-                          <FontAwesome5 name="times" size={24} color="#9ca3af" />
-                          <Text style={styles.noneText}>None</Text>
+              {loadingInventory ? (
+                <View style={{ paddingVertical: 20, width: '100%', alignItems: 'center' }}>
+                  <Text style={{ color: '#6b7280' }}>Cargando inventario…</Text>
+                </View>
+              ) : ownedOptionsForSelectedCategory.length === 0 ? (
+                <FadeInView from="bottom" delay={100} duration={450} style={{ width: '100%' }}>
+                  <View style={{ paddingVertical: 20, width: '100%', alignItems: 'center' }}>
+                    <Text style={{ color: '#6b7280' }}>No tienes ítems de esta categoría</Text>
+                  </View>
+                </FadeInView>
+              ) : (
+                <FadeInView from="bottom" delay={100} duration={450} style={{ width: '100%' }}>
+                  {ownedOptionsForSelectedCategory.map((opt) => {
+                    const isNone = opt.svgUrl === 'none';
+                    const isSelected = getCurrentAssetKey() === opt.svgUrl;
+                    return (
+                      <TouchableOpacity
+                        key={`${selectedCategory}-${opt.id}-${opt.svgUrl}`}
+                        style={[
+                          styles.assetOption,
+                          isSelected && styles.assetOptionSelected
+                        ]}
+                        onPress={() => handleAssetSelect(opt.svgUrl)}
+                      >
+                        <View style={styles.assetPreview}>
+                          {isNone ? (
+                            <View style={styles.noneOption}>
+                              <FontAwesome5 name="times" size={24} color="#9ca3af" />
+                              <Text style={styles.noneText}>None</Text>
+                            </View>
+                          ) : opt.storeImage ? (
+                            <ExpoImage
+                              source={{ uri: opt.storeImage }}
+                              style={{ width: 100, height: 100 }}
+                              contentFit="contain"
+                              cachePolicy="disk"
+                            />
+                          ) : (
+                            <View style={[styles.noneOption, { width: 100, height: 100 }]}>
+                              <Text style={styles.noneText}>Sin vista previa</Text>
+                            </View>
+                          )}
                         </View>
-                      ) : (
-                        <LayeredAvatar 
-                          avatar={getPreviewAvatar(assetKey)}
-                          size={100}
-                        />
-                      )}
-                    </View>
-                    
-                    {isSelected && (
-                      <View style={styles.selectedIndicator}>
-                        <FontAwesome5 name="check" size={12} color="#fff" />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
+                        {isSelected && (
+                          <View style={styles.selectedIndicator}>
+                            <FontAwesome5 name="check" size={12} color="#fff" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </FadeInView>
+              )}
             </View>
           </ScrollView>
         </View>

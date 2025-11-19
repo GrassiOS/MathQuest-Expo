@@ -12,7 +12,7 @@ import {
 } from 'phosphor-react-native';
 import React from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LayeredAvatar } from '@/components/LayeredAvatar';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,6 +37,7 @@ export default function UserScreen() {
   const [isRecentOpen, setIsRecentOpen] = React.useState(false);
   const [recentMatches, setRecentMatches] = React.useState<UserMatchItem[]>([]);
   const [isRecentReady, setIsRecentReady] = React.useState(false);
+  const insets = useSafeAreaInsets();
 
   const formatDateShort = (iso: string | null): string => {
     if (!iso) return '';
@@ -207,7 +208,9 @@ export default function UserScreen() {
           <FadeInView from="bottom" delay={300}>
           <View style={styles.recentSection}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={[styles.sectionTitle, { fontFamily: 'Gilroy-Black' }]}>PARTIDAS RECIENTES</Text>
+              <TouchableOpacity onPress={() => setIsRecentOpen(true)} activeOpacity={0.8}>
+                <Text style={[styles.sectionTitle, { fontFamily: 'Gilroy-Black' }]}>PARTIDAS RECIENTES</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.chevronButton} onPress={() => setIsRecentOpen(true)}>
                 <CaretRightIcon size={20} color="#fff" weight="fill" />
               </TouchableOpacity>
@@ -259,9 +262,13 @@ export default function UserScreen() {
         visible={isRecentOpen}
         animationType="none"
         presentationStyle="fullScreen"
+        statusBarTranslucent
         onRequestClose={() => setIsRecentOpen(false)}
       >
-        <SafeAreaView style={styles.fullModalContainer}>
+        <SafeAreaView
+          style={[styles.fullModalContainer, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}
+          edges={['top', 'bottom']}
+        >
           <View style={styles.fullModalHeader}>
             <Text style={[styles.sheetTitle, { fontFamily: 'Gilroy-Black' }]}>Partidas recientes</Text>
             <TouchableOpacity style={styles.fullModalCloseButton} onPress={() => setIsRecentOpen(false)} activeOpacity={0.8}>

@@ -28,23 +28,33 @@ export default function ForgotPasswordScreen() {
   const [error, setError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
 
+  const normalizeEmail = (value: string) =>
+    value
+      .normalize('NFKC')
+      .trim()
+      .toLowerCase()
+      // remove any spaces and zero-width/invisible spaces pasted from clipboard
+      .replace(/\s+/g, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '');
+
   const validateEmail = (email: string) => {
     return /\S+@\S+\.\S+/.test(email);
   };
 
   const handleResetPassword = async () => {
-    if (!email.trim()) {
+    const normalized = normalizeEmail(email);
+    if (!normalized) {
       setError('El email es requerido');
       return;
     }
 
-    if (!validateEmail(email)) {
+    if (!validateEmail(normalized)) {
       setError('El email no es válido');
       return;
     }
 
     try {
-      const { error } = await resetPassword(email.trim());
+      const { error } = await resetPassword(normalized);
 
       if (error) {
         setError(error.message);

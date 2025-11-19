@@ -23,6 +23,15 @@ export default function LoginScreen() {
 
   const { signIn, loading } = useAuth();
   
+  const normalizeEmail = (value: string) =>
+    value
+      .normalize('NFKC')
+      .trim()
+      .toLowerCase()
+      // remove any spaces and zero-width/invisible spaces pasted from clipboard
+      .replace(/\s+/g, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '');
+  
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -37,9 +46,10 @@ export default function LoginScreen() {
   const validateForm = () => {
     const newErrors: typeof errors = {};
 
-    if (!formData.email.trim()) {
+    const email = normalizeEmail(formData.email);
+    if (!email) {
       newErrors.email = 'El email es requerido';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
       newErrors.email = 'El email no es válido';
     }
 
@@ -58,7 +68,7 @@ export default function LoginScreen() {
 
     try {
       const { user, error } = await signIn({
-        email: formData.email.trim(),
+        email: normalizeEmail(formData.email),
         password: formData.password,
       });
 

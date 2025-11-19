@@ -23,6 +23,15 @@ import { useFontContext } from '@/contexts/FontsContext';
 
   const { signUp, loading } = useAuth();
   
+  const normalizeEmail = (value: string) =>
+    value
+      .normalize('NFKC')
+      .trim()
+      .toLowerCase()
+      // remove any spaces and zero-width/invisible spaces pasted from clipboard
+      .replace(/\s+/g, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '');
+  
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -47,9 +56,11 @@ import { useFontContext } from '@/contexts/FontsContext';
       newErrors.username = 'El nombre de usuario debe tener al menos 3 caracteres';
     }
 
-    if (!formData.email.trim()) {
+    const trimmedEmail = formData.email.trim();
+    const email = normalizeEmail(trimmedEmail);
+    if (!email) {
       newErrors.email = 'El email es requerido';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
       newErrors.email = 'El email no es válido';
     }
 
@@ -75,7 +86,7 @@ import { useFontContext } from '@/contexts/FontsContext';
     try {
       const { user, error } = await signUp({
         username: formData.username.trim(),
-        email: formData.email.trim(),
+        email: normalizeEmail(formData.email),
         password: formData.password,
       });
 
@@ -85,7 +96,7 @@ import { useFontContext } from '@/contexts/FontsContext';
       } else if (user) {
         Alert.alert(
           '¡Cuenta creada!',
-          'Revisa tu email para confirmar tu cuenta.',
+          'Bienvenido a MathQuest!',
           [
             {
               text: 'OK',

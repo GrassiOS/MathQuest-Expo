@@ -45,8 +45,15 @@ class AuthService {
    */
   async signUp({ email, password, username }: SignUpData): Promise<AuthResponse> {
     try {
+      const normalizedEmail = email
+        .normalize('NFKC')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '');
+
       const { data, error } = await this.supabase.auth.signUp({
-        email,
+        email: normalizedEmail,
         password,
         options: {
           data: {
@@ -80,8 +87,15 @@ class AuthService {
    */
   async signIn({ email, password }: SignInData): Promise<AuthResponse> {
     try {
+      const normalizedEmail = email
+        .normalize('NFKC')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '');
+
       const { data, error } = await this.supabase.auth.signInWithPassword({
-        email,
+        email: normalizedEmail,
         password,
       });
 

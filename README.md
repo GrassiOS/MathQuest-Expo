@@ -6,7 +6,7 @@
 
 ### 1) Clone and install
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/GrassiOS/MathQuest-Expo.git
 cd MathQuest-Expo
 npm i
 ```

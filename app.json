@@ -1,19 +1,21 @@
 {
   "expo": {
-    "name": "MathQuest-Expo",
-    "slug": "MathQuest-Expo",
+    "name": "MathQuest",
+    "slug": "MathQuest",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/AppIcon.png",
     "scheme": "mathquestexpo",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.martinortiz.mathquest",
       "supportsTablet": true,
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
-        }
+        },
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -49,6 +51,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1b3ecad3-e368-483c-8973-4e03d210a026"
+      }
     }
   }
 }

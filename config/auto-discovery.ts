@@ -15,17 +15,10 @@ class ServerDiscovery {
 
   // Rangos de IP comunes para buscar
   private readonly COMMON_RANGES = [
-    '10.41.141.145', //UABC 5G Valle Dorado
-
-    '10.41.13.254',
-    //'10.41.7.181',
-    //'192.168.1.227', // IP actual detectada
-    '192.168.1.234', // FOG 5G
-    '192.168.100',  // Red actual (PRIMERA PRIORIDAD)
     '192.168.1',    // Router doméstico común
     '192.168.0',    // Router doméstico común
     '10.0.0',       // Red empresarial
-    '10.41.21',     // Red universitaria anterior
+    '10.41.21',     // Red universitaria actual
     '172.16.0',     // Red privada
     '192.168.43',   // Hotspot Android
     '172.20.10',    // Hotspot iPhone
@@ -34,14 +27,8 @@ class ServerDiscovery {
 
   // IPs específicas conocidas
   private readonly KNOWN_IPS = [
-    '10.41.141.145', //UABC 5G Valle Dorado
-    '10.41.13.254',
-    '10.41.7.181', // UABC 5G
-    '192.168.1.234', // FOG 5G
-    '192.168.1.227', // FOG 2.4
-    '192.168.100.246',  // IP actual detectada
-    '192.168.100.3',    // IP anterior
-    '10.41.21.217',    // IP universitaria anterior
+    '10.41.21.217',  // IP actual
+    '192.168.100.3', // IP anterior
     'localhost',
     '127.0.0.1'
   ];
@@ -136,18 +123,65 @@ class ServerDiscovery {
   }
 
   /**
+   * Verifica si el servidor de Render está disponible
+   */
+  private async checkRenderServer(): Promise<ServerInfo | null> {
+    try {
+      const renderURL = 'https://server-x7b4.onrender.com';
+      const url = `${renderURL}/api/status`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos timeout
+
+      const response = await fetch(url, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+        }
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'online') {
+          const serverInfo: ServerInfo = {
+            ip: 'server-x7b4.onrender.com',
+            port: 443,
+            url: renderURL,
+            lastSeen: Date.now()
+          };
+          console.log(`✅ Servidor Render encontrado: ${renderURL}`);
+          return serverInfo;
+        }
+      }
+    } catch (error) {
+      // Silenciar errores de conexión
+      console.log('⚠️ Servidor Render no disponible, buscando en red local...');
+    }
+    return null;
+  }
+
+  /**
    * Obtiene la URL del servidor automáticamente
    */
   async getServerURL(): Promise<string> {
+    // Primero intentar conectar a Render (producción)
+    const renderServer = await this.checkRenderServer();
+    if (renderServer) {
+      return renderServer.url;
+    }
+    
+    // Si Render no está disponible, buscar en la red local
     const server = await this.findBestServer();
     
     if (server) {
       return server.url;
     }
     
-    // Fallback a localhost
-    console.log('⚠️ Usando localhost como fallback');
-    return 'http://localhost:3001';
+    // Fallback final: usar Render (puede estar disponible más tarde)
+    console.log('⚠️ No se encontró servidor local, usando Render como fallback');
+    return 'https://server-x7b4.onrender.com';
   }
 
   /**
@@ -198,4 +232,3 @@ export const getAutoServerURL = async (): Promise<string> => {
 export const findBestServer = async (): Promise<ServerInfo | null> => {
   return await serverDiscovery.findBestServer();
 };
-

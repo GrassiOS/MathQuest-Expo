@@ -2,12 +2,7 @@
 export const NETWORK_CONFIG = {
   // IPs comunes para probar (se detectará automáticamente)
   COMMON_IPS: [
-    '10.41.141.145', //UABC 5G Valle Dorado
-    '10.41.13.254',
-    '10.41.7.181', //UABC 5G
-    '192.168.1.227', // IP actual detectada (PRIMERA PRIORIDAD)
-    '192.168.1.234', // FOG 5G
-    '192.168.100.246',   // IP actual detectada (PRIMERA PRIORIDAD)
+    '10.41.21.217',   // IP actual detectada (PRIMERA PRIORIDAD)
     '192.168.1.1',    // Router común
     '192.168.0.1',    // Router común
     '192.168.100.3',  // IP anterior
@@ -130,8 +125,8 @@ export const getConnectionURL = async (): Promise<string> => {
     return 'http://localhost:3001';
   }
   
-  // En producción, usar el servidor de producción
-  return 'https://tu-servidor-produccion.com';
+  // En producción, usar el servidor de Render
+  return 'https://server-x7b4.onrender.com';
 };
 
 // Logs de debug para verificar la configuración

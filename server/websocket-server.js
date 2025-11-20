@@ -1,12 +1,13 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 
-// Configuración de Supabase
-const supabaseUrl = 'https://fdfmtjjeylzznldkrqwl.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZkZm10ampleWx6em5sZGtycXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc4OTc1MjUsImV4cCI6MjA3MzQ3MzUyNX0.NVrultR2VA-LI-gqow7ckOsOCb1UvQ08BTfBqImveCc';
+// Configuración de Supabase desde variables de entorno
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 // Crear cliente de Supabase
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -56,11 +57,12 @@ setInterval(cleanupOrphanedGames, 2 * 60 * 1000);
 
 // Categorías del juego
 const GAME_CATEGORIES = [
-  { id: 'sumas', name: 'Sumas', emoji: 'Plusito', color: '#00F715' },
-  { id: 'restas', name: 'Restas', emoji: 'Restin', color: '#6DBCFD' },
-  { id: 'multiplicacion', name: 'Multiplicación', emoji: 'Porfix', color: '#FD5353' },
-  { id: 'division', name: 'División', emoji: 'Dividin', color: '#F2F700' },
-  { id: 'totalin', name: 'TotalIn', emoji: 'Totalin', color: '#C71BED' }
+  { id: 'sumas', name: 'Sumas', emoji: '➕', color: '#4CAF50' },
+  { id: 'restas', name: 'Restas', emoji: '➖', color: '#F44336' },
+  { id: 'multiplicacion', name: 'Multiplicación', emoji: '✖️', color: '#FF9800' },
+  { id: 'division', name: 'División', emoji: '➗', color: '#9C27B0' },
+  { id: 'fracciones', name: 'Fracciones', emoji: '🔢', color: '#2196F3' },
+  { id: 'totalin', name: 'TotalIn', emoji: '🎯', color: '#E91E63' }
 ];
 
 // Función para seleccionar categoría aleatoria
@@ -162,78 +164,46 @@ async function finishMatch(matchId, winnerId) {
   }
 }
 
-async function updateGlobalPoints(userId, pointsChange, username = null) {
+async function updateGlobalPoints(userId, pointsChange) {
   try {
     console.log(`💰 Actualizando puntos globales - Usuario: ${userId}, Cambio: ${pointsChange}`);
     
-    // Primero obtener los puntos actuales, username y email
+    // Primero obtener los puntos actuales
     const { data: currentProfile, error: fetchError } = await supabase
       .from('profiles')
-      .select('points, username, email')
+      .select('points')
       .eq('id', userId)
-      .maybeSingle(); // Usar maybeSingle en lugar de single para evitar error si no existe
+      .single();
 
-    let currentPoints = 0;
-    
-    if (fetchError || !currentProfile) {
-      console.log(`   ⚠️ Perfil no encontrado, creando uno nuevo para ${userId}`);
-      currentPoints = 0;
-    } else {
-      currentPoints = currentProfile.points || 0;
+    if (fetchError) {
+      console.error('❌ Error obteniendo perfil actual:', fetchError);
+      throw fetchError;
     }
 
+    const currentPoints = currentProfile?.points || 0;
     const newPoints = Math.max(0, currentPoints + pointsChange); // No permitir puntos negativos
     
     console.log(`   📊 Puntos actuales: ${currentPoints}`);
     console.log(`   📈 Cambio: ${pointsChange}`);
     console.log(`   🎯 Nuevos puntos: ${newPoints}`);
 
-    // Preparar datos para upsert
-    const upsertData = {
-      id: userId,
-      points: newPoints,
-      updated_at: new Date().toISOString()
-    };
-    
-    // SIEMPRE incluir username - si se proporciona, usarlo; si no, usar el del perfil existente
-    if (username) {
-      upsertData.username = username;
-    } else if (currentProfile && currentProfile.username) {
-      // Mantener el username existente si no se proporcionó uno nuevo
-      upsertData.username = currentProfile.username;
-    } else {
-      // Si no hay username ni en parámetros ni en perfil, usar un placeholder
-      console.log(`⚠️ No se proporcionó username para ${userId}, usando placeholder`);
-      upsertData.username = 'Usuario';
-    }
-    
-    // SIEMPRE incluir email - mantener el existente si está disponible
-    if (currentProfile && currentProfile.email) {
-      upsertData.email = currentProfile.email;
-    } else {
-      // Si no hay email en el perfil existente, usar el userId como email temporal
-      // Esto asume que el userId es un UUID de Supabase Auth
-      console.log(`⚠️ No se encontró email para ${userId}, usando placeholder`);
-      upsertData.email = `${userId}@temp.com`; // Email temporal
-    }
-    
-    console.log(`📝 Upsert data:`, upsertData);
-    
-    // Usar upsert para crear o actualizar el perfil
     const { data, error } = await supabase
       .from('profiles')
-      .upsert(upsertData, {
-        onConflict: 'id'
+      .update({
+        points: newPoints,
+        updated_at: new Date().toISOString()
       })
-      .select();
+      .eq('id', userId)
+      .select()
+      .single();
 
     if (error) {
       console.error('❌ Error actualizando puntos globales:', error);
       throw error;
     }
     
-    console.log(`✅ Puntos globales actualizados exitosamente`);
-    return data?.[0] || { id: userId, points: newPoints };
+    console.log(`✅ Puntos globales actualizados exitosamente:`, data);
+    return data;
   } catch (error) {
     console.error('❌ Error updating global points:', error);
     return null;
@@ -259,6 +229,9 @@ function generateExercises(category, count = 6) {
         break;
       case 'division':
         exercise = generateDivisionExercise();
+        break;
+      case 'fracciones':
+        exercise = generateFractionExercise();
         break;
       case 'totalin':
         // Mezclar todas las categorías
@@ -331,6 +304,20 @@ function generateDivisionExercise() {
     answer,
     options: generateOptions(answer),
     category: 'division'
+  };
+}
+
+function generateFractionExercise() {
+  const numerator = Math.floor(Math.random() * 10) + 1;
+  const denominator = Math.floor(Math.random() * 10) + 2;
+  const answer = Math.round((numerator / denominator) * 100) / 100;
+  
+  return {
+    id: `frac_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    question: `${numerator}/${denominator} = ?`,
+    answer,
+    options: generateOptions(answer),
+    category: 'fracciones'
   };
 }
 
@@ -975,42 +962,16 @@ io.on('connection', (socket) => {
 
     console.log('✅ Sala encontrada:', roomId, 'Usuarios:', Array.from(room.users.keys()));
     
-    // Verificar que el usuario esté en la sala usando socketId
-    const socketId = socket.id;
-    
-    // Buscar si el usuario está en la sala (por socketId o por userId)
-    let playerSocketId = socketId;
-    let foundInRoom = false;
-    
-    // Primero verificar por socketId
-    if (room.users.has(socketId)) {
-      foundInRoom = true;
-      playerSocketId = socketId;
-    } else {
-      // Si no está por socketId, buscar por userId en los valores de la sala
-      for (const [key, userData] of room.users.entries()) {
-        if (userData.id === userId) {
-          foundInRoom = true;
-          playerSocketId = key;
-          // Actualizar el socketId con el nuevo
-          room.users.set(socketId, userData);
-          room.users.delete(key);
-          console.log(`🔄 SocketId actualizado: ${key} -> ${socketId}`);
-          break;
-        }
-      }
-    }
-    
-    if (!foundInRoom) {
-      console.log('❌ Usuario no está en la sala - SocketID:', socketId, 'UserId:', userId, 'Usuarios en sala:', Array.from(room.users.entries()));
+    // Verificar que el usuario esté en la sala
+    if (!room.users.has(socket.id)) {
+      console.log('❌ Socket no está en la sala:', socket.id, 'Usuarios en sala (socketIds):', Array.from(room.users.keys()));
       socket.emit('error', { message: 'Usuario no está en esta sala' });
       return;
     }
 
     // Crear juego si no existe
-    const existingGame = activeGames.get(roomId);
-    if (!existingGame) {
-      // Usar socket IDs ACTUALES para identificar jugadores
+    if (!activeGames.has(roomId)) {
+      // Usar socket IDs para identificar jugadores
       const roomUsers = Array.from(room.users.keys());
       const game = {
         id: `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -1019,14 +980,11 @@ io.on('connection', (socket) => {
         player2: roomUsers[1], // Socket ID del segundo jugador
         rounds: [],
         currentRound: 0,
-        totalRounds: 3,
+        totalRounds: 6,
         player1TotalScore: 0,
         player2TotalScore: 0,
         player1RoundsWon: 0,
         player2RoundsWon: 0,
-        lastCategoryId: null,
-        usedCategoryIds: [],
-        roundTimerId: null,
         playersReady: 0, // Contador de jugadores listos
         gameStatus: 'waiting',
         createdAt: Date.now() // Timestamp para limpieza de juegos huérfanos
@@ -1034,14 +992,6 @@ io.on('connection', (socket) => {
       
       activeGames.set(roomId, game);
       console.log(`🎮 Juego creado para sala ${roomId}: ${game.player1} vs ${game.player2}`);
-    } else {
-      // Si el juego ya existe, actualizar los socketIds por si hubo reconexión
-      const roomUsers = Array.from(room.users.keys());
-      if (roomUsers.length >= 2) {
-        existingGame.player1 = roomUsers[0];
-        existingGame.player2 = roomUsers[1];
-        console.log(`🔄 SocketIds actualizados en juego: ${existingGame.player1} vs ${existingGame.player2}`);
-      }
     }
 
     const game = activeGames.get(roomId);
@@ -1059,7 +1009,7 @@ io.on('connection', (socket) => {
     }
     
     // Solo incrementar si este jugador no ha enviado start-game antes
-    const playerKey = playerSocketId === game.player1 ? 'player1' : 'player2';
+    const playerKey = socket.id === game.player1 ? 'player1' : 'player2';
     if (!game[`${playerKey}Ready`]) {
       game[`${playerKey}Ready`] = true;
       game.playersReady++;
@@ -1067,22 +1017,14 @@ io.on('connection', (socket) => {
     
     console.log(`🎮 Jugador ${userId} listo. Jugadores listos: ${game.playersReady}/${gameRoom.users.size}`);
     
-          // Iniciar primera ronda cuando ambos jugadores estén listos
-          if (game.playersReady >= 2 && game.gameStatus === 'waiting') {
-            console.log('🎮 Ambos jugadores listos - iniciando primera ronda INMEDIATAMENTE...');
-            game.gameStatus = 'playing';
-            startRound(roomId);
-          } else if (game.playersReady >= 2) {
-            console.log('🎮 Ambos jugadores listos pero juego ya iniciado');
-            // Si el juego ya está iniciado pero no hay ronda activa, iniciar ronda
-            if (!game.rounds || game.rounds.length === 0) {
-              console.log('🎮 No hay rondas activas - iniciando primera ronda...');
-              startRound(roomId);
-            } else {
-              // Si hay rondas pero el juego está en estado incorrecto, resetear
-              console.log('🎮 Juego en estado inconsistente - reiniciando...');
+          // Iniciar primera ronda SOLO una vez cuando ambos jugadores estén listos
+          if (game.playersReady >= 2) {
+            if (game.gameStatus === 'waiting' && game.rounds.length === 0) {
+              console.log('🎮 Ambos jugadores listos - iniciando primera ronda INMEDIATAMENTE...');
               game.gameStatus = 'playing';
               startRound(roomId);
+            } else {
+              console.log('🎮 start-game ignorado: juego ya iniciado o ronda activa');
             }
           } else {
             console.log(`🎮 Esperando más jugadores... (${game.playersReady}/2)`);
@@ -1117,20 +1059,7 @@ io.on('connection', (socket) => {
     }
 
     const isCorrect = answer === exercise.answer;
-    
-    // Determinar el playerKey usando socketId en lugar de userId
-    const socketId = socket.id;
-    let playerKey;
-    
-    // Buscar el socketId en la sala para determinar si es player1 o player2
-    const room = rooms.get(roomId);
-    if (!room || !room.users.has(socketId)) {
-      socket.emit('error', { message: 'Usuario no está en la sala' });
-      return;
-    }
-    
-    // Determinar playerKey comparando socketId
-    playerKey = socketId === game.player1 ? 'player1' : 'player2';
+    const playerKey = socket.id === game.player1 ? 'player1' : 'player2';
     
     // Verificar si el jugador ya completó la ronda
     if (currentRound[`${playerKey}Completed`]) {
@@ -1212,43 +1141,36 @@ io.on('connection', (socket) => {
       if (currentRound.player1Completed && currentRound.player2Completed) {
         finishRound(game, roomId);
       } else {
-        // Un jugador terminó, iniciar temporizador de 30 segundos SOLO para esta sala/ronda
-        const roundIndex = game.currentRound;
-        console.log(`⏰ Iniciando temporizador de 30 segundos para la ronda ${roundIndex + 1} (room: ${roomId})`);
-
-        // Cancelar temporizador previo si existía
-        if (game.roundTimerId) {
-          clearTimeout(game.roundTimerId);
-          game.roundTimerId = null;
-        }
-
+        // Un jugador terminó, iniciar temporizador de 30 segundos
+        console.log(`⏰ Iniciando temporizador de 30 segundos para la ronda ${game.currentRound + 1}`);
+        
         // Notificar a ambos jugadores que se inició el temporizador
         io.to(roomId).emit('timer-started', {
-          roundNumber: roundIndex + 1,
+          roundNumber: game.currentRound + 1,
           timeLeft: 30,
           message: 'Un jugador terminó, 30 segundos restantes'
         });
-
-        game.roundTimerId = setTimeout(() => {
-          const active = activeGames.get(roomId);
-          // Validar que siga en la misma ronda
-          if (!active || active.currentRound !== roundIndex) return;
-          const r = active.rounds[roundIndex];
-          if (!r) return;
+        
+        setTimeout(() => {
           // Verificar si el otro jugador terminó en ese tiempo
-          if (!r.player1Completed || !r.player2Completed) {
-            console.log(`⏰ Tiempo agotado para la ronda ${roundIndex + 1} (room: ${roomId})`);
-            r.player1Completed = true;
-            r.player2Completed = true;
+          if (!currentRound.player1Completed || !currentRound.player2Completed) {
+            console.log(`⏰ Tiempo agotado para la ronda ${game.currentRound + 1}`);
+            
+            // Forzar finalización de la ronda
+            currentRound.player1Completed = true;
+            currentRound.player2Completed = true;
+            
+            // Notificar que el tiempo se agotó
             io.to(roomId).emit('round-timeout', {
-              roundNumber: roundIndex + 1,
+              roundNumber: game.currentRound + 1,
               message: 'Tiempo agotado',
-              player1Score: r.player1Score,
-              player2Score: r.player2Score
+              player1Score: currentRound.player1Score,
+              player2Score: currentRound.player2Score
             });
-            finishRound(active, roomId);
+            
+            finishRound(game, roomId);
           }
-        }, 30000);
+        }, 30000); // 30 segundos
       }
     }
 
@@ -1265,18 +1187,6 @@ io.on('connection', (socket) => {
   // Manejo de errores
   socket.on('error', (error) => {
     console.error(`❌ Error en socket ${socket.id}:`, error);
-  });
-
-  // Rendición/abandono de partida
-  socket.on('forfeit-game', (data) => {
-    const { roomId } = data || {};
-    if (!roomId) return;
-    const game = activeGames.get(roomId);
-    if (!game || game.gameStatus !== 'playing') return;
-    const mySocketId = socket.id;
-    const forcedWinner = mySocketId === game.player1 ? game.player2 : game.player1;
-    console.log(`🏳️ Rendición en sala ${roomId}. Gana: ${forcedWinner}. Perdedor penalizado: ${mySocketId}`);
-    finishGame(game, roomId, { forcedWinner, forcedLoserPenalty: 25, forcedWinnerBonus: 30 });
   });
 
   // Ping/Pong para mantener conexión
@@ -1369,9 +1279,10 @@ function startRound(roomId) {
   console.log('🎯 startRound llamada para roomId:', roomId);
   
   const room = rooms.get(roomId);
-  if (!room) {
+  if (!room || !room.selectedCategory) {
     console.error('❌ No se puede iniciar ronda: sala o categoría no encontrada');
     console.error('❌ Room:', room);
+    console.error('❌ selectedCategory:', room?.selectedCategory);
     return;
   }
 
@@ -1380,30 +1291,15 @@ function startRound(roomId) {
     console.error('❌ No se puede iniciar ronda: juego no encontrado');
     return;
   }
+  
+  // Evitar iniciar múltiples veces la misma ronda
+  if (game.rounds[game.currentRound]) {
+    console.log('⚠️ Ya existe una ronda activa en el índice actual, startRound ignorado');
+    return;
+  }
 
   const roundNumber = game.currentRound + 1;
-  // Definir rotación de categorías por ronda
-  const CATEGORY_SEQUENCE = ['sumas', 'restas', 'multiplicacion', 'division'];
-  const CATEGORY_DEFS = {
-    sumas: { id: 'sumas', name: 'Sumas', emoji: 'Plusito', color: '#00F715' },//6DBCFD
-    restas: { id: 'restas', name: 'Restas', emoji: 'Restin', color: '#6DBCFD' },
-    multiplicacion: { id: 'multiplicacion', name: 'Multiplicación', emoji: 'Porfix', color: '#FD5353' },
-    division: { id: 'division', name: 'División', emoji: 'Dividin', color: '#F2F700' },
-  };
-  // Elegir categoría aleatoria SIN repetir dentro del juego
-  const allIds = CATEGORY_SEQUENCE;
-  if (!Array.isArray(game.usedCategoryIds)) game.usedCategoryIds = [];
-  let pool = allIds.filter(id => !game.usedCategoryIds.includes(id));
-  if (pool.length === 0) {
-    // Si se agotaron, reiniciar pool completo
-    pool = [...allIds];
-  }
-  // Evitar repetir la inmediatamente anterior si hay alternativas
-  if (game.lastCategoryId && pool.length > 1) {
-    pool = pool.filter(id => id !== game.lastCategoryId);
-  }
-  const categoryId = pool[Math.floor(Math.random() * pool.length)];
-  const category = categoryId;
+  const category = room.selectedCategory.id;
   
   console.log(`🎯 Iniciando ronda ${roundNumber} de ${game.totalRounds} - Categoría: ${category}`);
   
@@ -1429,21 +1325,13 @@ function startRound(roomId) {
   
   game.rounds.push(round);
   game.gameStatus = 'playing';
-  game.lastCategoryId = categoryId;
-  if (!game.usedCategoryIds.includes(categoryId)) {
-    game.usedCategoryIds.push(categoryId);
-  }
   
   // Enviar ejercicios a ambos jugadores
-  const p1Data = userMappings.get(game.player1);
-  const p2Data = userMappings.get(game.player2);
   const roundData = {
     roundNumber,
-    category: CATEGORY_DEFS[categoryId] || { id: categoryId, name: categoryId, emoji: '📘', color: '#666' },
+    category: room.selectedCategory,
     exercises,
-    totalRounds: game.totalRounds,
-    player1Username: p1Data?.username || '-',
-    player2Username: p2Data?.username || '-'
+    totalRounds: game.totalRounds
   };
   
   console.log(`📝 Ronda ${roundNumber} iniciada con ${exercises.length} ejercicios de ${category}`);
@@ -1463,11 +1351,6 @@ function startRound(roomId) {
 }
 
 async function finishRound(game, roomId) {
-  // Cancelar temporizador de ronda si estaba activo
-  if (game.roundTimerId) {
-    clearTimeout(game.roundTimerId);
-    game.roundTimerId = null;
-  }
   const currentRound = game.rounds[game.currentRound];
   const room = rooms.get(roomId);
   
@@ -1567,20 +1450,10 @@ async function finishRound(game, roomId) {
       }
   
   // Enviar resultados de la ronda
-  // Adjuntar usernames como en game-finished para que el cliente muestre nombres consistentes
-  const p1UserData = userMappings.get(game.player1);
-  const p2UserData = userMappings.get(game.player2);
-  const player1Username = p1UserData?.username || '-';
-  const player2Username = p2UserData?.username || '-';
-
   io.to(roomId).emit('round-finished', {
     roundNumber: game.currentRound + 1,
     player1Score: currentRound.player1Score,
     player2Score: currentRound.player2Score,
-    player1Username,
-    player2Username,
-    player1: game.player1,
-    player2: game.player2,
     winner: roundWinner,
     player1TotalScore: game.player1TotalScore,
     player2TotalScore: game.player2TotalScore,
@@ -1605,7 +1478,7 @@ async function finishRound(game, roomId) {
   }
 }
 
-async function finishGame(game, roomId, options = {}) {
+async function finishGame(game, roomId) {
   const room = rooms.get(roomId);
   
   // Determinar ganador del juego por rondas ganadas
@@ -1613,10 +1486,7 @@ async function finishGame(game, roomId, options = {}) {
   const player1RoundsWon = game.player1RoundsWon || 0;
   const player2RoundsWon = game.player2RoundsWon || 0;
   
-  if (options.forcedWinner) {
-    gameWinner = options.forcedWinner;
-    console.log(`🏆 Ganador forzado por regla: ${gameWinner}`);
-  } else if (player1RoundsWon > player2RoundsWon) {
+  if (player1RoundsWon > player2RoundsWon) {
     gameWinner = game.player1;
     console.log(`🏆 ${game.player1} gana el juego por rondas (${player1RoundsWon} vs ${player2RoundsWon})`);
   } else if (player2RoundsWon > player1RoundsWon) {
@@ -1676,21 +1546,17 @@ async function finishGame(game, roomId, options = {}) {
       console.log(`✅ Match finalizado en Supabase: ${room.matchId} - Ganador UUID: ${winnerUserId}`);
       
       // Actualizar puntos globales de los usuarios
-      if (winnerUserId && loserUserId && player1UserData && player2UserData) {
+      if (winnerUserId && loserUserId) {
         console.log(`💰 Actualizando puntos globales...`);
         
-        // Obtener winnerUsername y loserUsername
-        const winnerUsername = gameWinner === game.player1 ? player1UserData.username : player2UserData.username;
-        const loserUsername = gameWinner === game.player1 ? player2UserData.username : player1UserData.username;
-        
         // Ganador: +30 puntos
-        const winnerUpdate = await updateGlobalPoints(winnerUserId, 30, winnerUsername);
+        const winnerUpdate = await updateGlobalPoints(winnerUserId, 30);
         if (winnerUpdate) {
           console.log(`✅ Ganador ${winnerUserId}: +30 puntos (total: ${winnerUpdate.points})`);
         }
         
         // Perdedor: -25 puntos (mínimo 0)
-        const loserUpdate = await updateGlobalPoints(loserUserId, -25, loserUsername);
+        const loserUpdate = await updateGlobalPoints(loserUserId, -25);
         if (loserUpdate) {
           console.log(`✅ Perdedor ${loserUserId}: -25 puntos (total: ${loserUpdate.points})`);
         }
@@ -1705,31 +1571,16 @@ async function finishGame(game, roomId, options = {}) {
     }
   }
   
-  let loser = null;
-  if (gameWinner === game.player1) loser = game.player2;
-  else if (gameWinner === game.player2) loser = game.player1;
-
-  // Si hay mapeo de usuario, añade username (opcionalmente)
-  const player1UserData = userMappings.get(game.player1);
-  const player2UserData = userMappings.get(game.player2);
-  const player1Username = player1UserData?.username || '-';
-  const player2Username = player2UserData?.username || '-';
-
-  const globalPointsUpdate = (typeof options.forcedLoserPenalty === 'number' || typeof options.forcedWinnerBonus === 'number')
-    ? { winner: options.forcedWinnerBonus ?? 0, loser: options.forcedLoserPenalty ? -Math.abs(options.forcedLoserPenalty) : 0 }
-    : { winner: gameWinner ? 30 : 0, loser: gameWinner ? -25 : 0 };
-
+  // Enviar resultados finales
   io.to(roomId).emit('game-finished', {
-    winner: gameWinner, // uuid del que ganó, o null si empate
-    loser,
-    player1: game.player1,
-    player2: game.player2,
-    player1Username,
-    player2Username,
+    winner: gameWinner,
     player1TotalScore: game.player1TotalScore,
     player2TotalScore: game.player2TotalScore,
     rounds: game.rounds,
-    globalPointsUpdate
+    globalPointsUpdate: {
+      winner: gameWinner ? 30 : 0,
+      loser: gameWinner ? -25 : 0
+    }
   });
   
   // Limpiar juego después de un tiempo
@@ -1742,18 +1593,29 @@ async function finishGame(game, roomId, options = {}) {
 // Importar función para obtener IP automáticamente
 const { getLocalIP } = require('../scripts/get-ip');
 
-// Iniciar servidor
-const PORT = process.env.PORT || 3001;
-const LOCAL_IP = getLocalIP();
+// // Iniciar servidor
+// const PORT = process.env.PORT || 3001;
+// const LOCAL_IP = getLocalIP();
 
+// server.listen(PORT, '0.0.0.0', () => {
+//   console.log(`🚀 Servidor WebSocket ejecutándose en puerto ${PORT}`);
+//   console.log(`📱 Conecta tu app móvil a: http://${LOCAL_IP}:${PORT}`);
+//   console.log(`🌐 Estado del servidor: http://${LOCAL_IP}:${PORT}/api/status`);
+//   console.log(`🌐 También disponible en: http://localhost:${PORT}/api/status`);
+//   console.log(`🔧 IP detectada automáticamente: ${LOCAL_IP}`);
+//   console.log(`📋 Para actualizar la app móvil, usa esta IP: ${LOCAL_IP}`);
+// });
+
+// Iniciar servidor (versión para Render)
+const PORT = process.env.PORT || 3001;
+
+// Para Render, es importante escuchar en 0.0.0.0 para aceptar conexiones externas
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor WebSocket ejecutándose en puerto ${PORT}`);
-  console.log(`📱 Conecta tu app móvil a: http://${LOCAL_IP}:${PORT}`);
-  console.log(`🌐 Estado del servidor: http://${LOCAL_IP}:${PORT}/api/status`);
-  console.log(`🌐 También disponible en: http://localhost:${PORT}/api/status`);
-  console.log(`🔧 IP detectada automáticamente: ${LOCAL_IP}`);
-  console.log(`📋 Para actualizar la app móvil, usa esta IP: ${LOCAL_IP}`);
+  console.log(`🌐 Disponible públicamente en Render (usa wss://server-x7b4.onrender.com)`);
+  console.log(`✅ Servidor listo para recibir conexiones`);
 });
+
 
 // Manejo de errores
 process.on('uncaughtException', (error) => {

@@ -21,6 +21,9 @@ import { useFontContext } from '@/contexts/FontsContext';
 // stats are fetched via service
 import { FadeInView } from '@/components/shared/FadeInView';
 import { getUserMatchesDetailed, getUserStats, UserMatchItem } from '@/services/SupabaseService';
+import AuthService from '@/Core/Services/AuthService/AuthService';
+import { AuthButton } from '@/components/ui/AuthButton';
+import { AuthInput } from '@/components/ui/AuthInput';
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,13 +33,23 @@ export default function UserScreen() {
   const { fontsLoaded } = useFontContext();
 
   const { avatar: userAvatar } = useAvatar();
-  const { user, signOut } = useAuth();
+  const { user, signOut, refreshSession } = useAuth();
   const [gamesPlayed, setGamesPlayed] = React.useState(0);
   const [winRate, setWinRate] = React.useState(0);
   const [recentMatch, setRecentMatch] = React.useState<UserMatchItem | null>(null);
   const [isRecentOpen, setIsRecentOpen] = React.useState(false);
   const [recentMatches, setRecentMatches] = React.useState<UserMatchItem[]>([]);
   const [isRecentReady, setIsRecentReady] = React.useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const [settingsTab, setSettingsTab] = React.useState<'username' | 'password'>('username');
+  const [newUsername, setNewUsername] = React.useState('');
+  const [usernameError, setUsernameError] = React.useState<string | null>(null);
+  const [isSavingUsername, setIsSavingUsername] = React.useState(false);
+  const [currentPassword, setCurrentPassword] = React.useState('');
+  const [newPassword, setNewPassword] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+  const [passwordError, setPasswordError] = React.useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = React.useState(false);
   const insets = useSafeAreaInsets();
 
   const formatDateShort = (iso: string | null): string => {
@@ -89,6 +102,109 @@ export default function UserScreen() {
     loadLatest();
   }, [user?.id]);
 
+  React.useEffect(() => {
+    if (isSettingsOpen) {
+      setNewUsername(user?.username ?? '');
+      setUsernameError(null);
+      setPasswordError(null);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setSettingsTab('username');
+    }
+  }, [isSettingsOpen, user?.username]);
+
+  const handleOpenSettings = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsSettingsOpen(true);
+  };
+
+  const handleSaveUsername = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const candidate = (newUsername || '').trim();
+    if (candidate.length < 3 || candidate.length > 20) {
+      setUsernameError('El usuario debe tener entre 3 y 20 caracteres.');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_\.]+$/.test(candidate)) {
+      setUsernameError('Solo letras, números, guión bajo o punto.');
+      return;
+    }
+    setUsernameError(null);
+    setIsSavingUsername(true);
+    try {
+      const supabase = AuthService.getClient();
+      const { data: authData, error: authUserError } = await supabase.auth.getUser();
+      if (authUserError || !authData?.user?.id) {
+        throw new Error('No hay usuario autenticado.');
+      }
+      const userId = authData.user.id;
+      const { error: profileErr } = await supabase
+        .from('profiles')
+        .update({ username: candidate, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+      if (profileErr) {
+        if ((profileErr as any)?.code === '23505') {
+          setUsernameError('Nombre de usuario no disponible.');
+          return;
+        }
+        throw profileErr;
+      }
+      const { error: authUpdateErr } = await supabase.auth.updateUser({
+        data: { username: candidate },
+      });
+      if (authUpdateErr) {
+        throw authUpdateErr;
+      }
+      await refreshSession();
+      Alert.alert('Listo', 'Tu nombre de usuario fue actualizado.');
+      setIsSettingsOpen(false);
+    } catch (e: any) {
+      console.error('Error updating username', e);
+      setUsernameError(e?.message || 'No se pudo actualizar el usuario.');
+    } finally {
+      setIsSavingUsername(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPasswordError(null);
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('Completa todos los campos.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('La nueva contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Las contraseñas no coinciden.');
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      if (!user?.email) throw new Error('No hay email de usuario.');
+      const reauth = await AuthService.signIn({ email: user.email, password: currentPassword });
+      if (reauth.error) {
+        setPasswordError('Contraseña actual incorrecta.');
+        return;
+      }
+      const supabase = AuthService.getClient();
+      const { error: pwErr } = await supabase.auth.updateUser({ password: newPassword });
+      if (pwErr) {
+        throw pwErr;
+      }
+      Alert.alert('Listo', 'Tu contraseña fue actualizada.');
+      setIsSettingsOpen(false);
+    } catch (e: any) {
+      console.error('Error changing password', e);
+      setPasswordError(e?.message || 'No se pudo cambiar la contraseña.');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const handleCustomizeAvatar = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push('/(modals)/avatar-customization-screen');
@@ -140,7 +256,7 @@ export default function UserScreen() {
           <FadeInView from="top" delay={0}>
             <View style={styles.header}>
               <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>PERFIL</Text>
-              <TouchableOpacity style={styles.headerAction} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.headerAction} activeOpacity={0.8} onPress={handleOpenSettings}>
                 <GearSixIcon size={20} color="#fff" weight="fill" />
               </TouchableOpacity>
             </View>
@@ -308,6 +424,100 @@ export default function UserScreen() {
               />
             </FadeInView>
           )}
+        </SafeAreaView>
+      </Modal>
+      {/* Settings Modal */}
+      <Modal
+        visible={isSettingsOpen}
+        animationType="none"
+        presentationStyle="fullScreen"
+        statusBarTranslucent
+        onRequestClose={() => setIsSettingsOpen(false)}
+      >
+        <SafeAreaView
+          style={[styles.fullModalContainer, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}
+          edges={['top', 'bottom']}
+        >
+          <View style={styles.fullModalHeader}>
+            <Text style={[styles.sheetTitle, { fontFamily: 'Gilroy-Black' }]}>Ajustes</Text>
+            <TouchableOpacity style={styles.fullModalCloseButton} onPress={() => setIsSettingsOpen(false)} activeOpacity={0.8}>
+              <Text style={[styles.fullModalCloseText, { fontFamily: 'Digitalt' }]}>CERRAR</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.settingsTabs}>
+            <TouchableOpacity
+              onPress={() => setSettingsTab('username')}
+              style={[styles.settingsTab, settingsTab === 'username' && styles.settingsTabActive]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.settingsTabText, { fontFamily: 'Gilroy-Black' }]}>USUARIO</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setSettingsTab('password')}
+              style={[styles.settingsTab, settingsTab === 'password' && styles.settingsTabActive]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.settingsTabText, { fontFamily: 'Gilroy-Black' }]}>CONTRASEÑA</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.settingsContent} keyboardShouldPersistTaps="handled">
+            {settingsTab === 'username' ? (
+              <FadeInView from="bottom" delay={0} style={{ gap: 16 }}>
+                <AuthInput
+                  icon="user"
+                  label="Nombre de usuario"
+                  placeholder="@usuario"
+                  value={newUsername}
+                  onChangeText={setNewUsername}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  error={usernameError || undefined}
+                />
+                <AuthButton
+                  title={isSavingUsername ? 'GUARDANDO...' : 'GUARDAR'}
+                  onPress={handleSaveUsername}
+                  loading={isSavingUsername}
+                />
+              </FadeInView>
+            ) : (
+              <FadeInView from="bottom" delay={0} style={{ gap: 16 }}>
+                <AuthInput
+                  icon="lock"
+                  label="Contraseña actual"
+                  placeholder="••••••••"
+                  secureTextEntry
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  returnKeyType="next"
+                />
+                <AuthInput
+                  icon="lock"
+                  label="Nueva contraseña"
+                  placeholder="••••••••"
+                  secureTextEntry
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  returnKeyType="next"
+                />
+                <AuthInput
+                  icon="lock"
+                  label="Confirmar contraseña"
+                  placeholder="••••••••"
+                  secureTextEntry
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  returnKeyType="done"
+                  error={passwordError || undefined}
+                />
+                <AuthButton
+                  title={isChangingPassword ? 'ACTUALIZANDO...' : 'ACTUALIZAR CONTRASEÑA'}
+                  onPress={handleChangePassword}
+                  loading={isChangingPassword}
+                />
+              </FadeInView>
+            )}
+          </ScrollView>
         </SafeAreaView>
       </Modal>
     </View>
@@ -610,6 +820,31 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  settingsTabs: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 12,
+  },
+  settingsTab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  settingsTabActive: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  settingsTabText: {
+    color: '#fff',
+    fontSize: 12,
+    letterSpacing: 1,
+  },
+  settingsContent: {
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   sheetListContent: {
     paddingBottom: 12,

@@ -1,19 +1,19 @@
 import { FontAwesome5 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Image as ExpoImage } from 'expo-image';
 
 import { LayeredAvatar } from '@/components/LayeredAvatar';
-import { avatarAssets, categoryConfig, defaultAvatar } from '@/constants/avatarAssets';
+import { FadeInView } from '@/components/shared/FadeInView';
+import { avatarAssets, categoryConfig } from '@/constants/avatarAssets';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useFontContext } from '@/contexts/FontsContext';
-import { Avatar, AvatarCategory } from '@/types/avatar';
 import { getStoreItems, getUserInventoryProductIds, StoreItemRow } from '@/services/SupabaseService';
-import { FadeInView } from '@/components/shared/FadeInView';
+import { Avatar, AvatarCategory } from '@/types/avatar';
 
 const { width, height } = Dimensions.get('window');
 
@@ -239,61 +239,59 @@ export default function AvatarCustomizationScreen() {
             style={styles.assetsScrollView}
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.assetsGrid}>
-              {loadingInventory ? (
+            {loadingInventory ? (
+              <View style={{ paddingVertical: 20, width: '100%', alignItems: 'center' }}>
+                <Text style={{ color: '#6b7280' }}>Cargando inventario…</Text>
+              </View>
+            ) : ownedOptionsForSelectedCategory.length === 0 ? (
+              <FadeInView from="bottom" delay={100} duration={450} style={{ width: '100%' }}>
                 <View style={{ paddingVertical: 20, width: '100%', alignItems: 'center' }}>
-                  <Text style={{ color: '#6b7280' }}>Cargando inventario…</Text>
+                  <Text style={{ color: '#6b7280' }}>No tienes ítems de esta categoría</Text>
                 </View>
-              ) : ownedOptionsForSelectedCategory.length === 0 ? (
-                <FadeInView from="bottom" delay={100} duration={450} style={{ width: '100%' }}>
-                  <View style={{ paddingVertical: 20, width: '100%', alignItems: 'center' }}>
-                    <Text style={{ color: '#6b7280' }}>No tienes ítems de esta categoría</Text>
-                  </View>
-                </FadeInView>
-              ) : (
-                <FadeInView from="bottom" delay={100} duration={450} style={{ width: '100%' }}>
-                  {ownedOptionsForSelectedCategory.map((opt) => {
-                    const isNone = opt.svgUrl === 'none';
-                    const isSelected = getCurrentAssetKey() === opt.svgUrl;
-                    return (
-                      <TouchableOpacity
-                        key={`${selectedCategory}-${opt.id}-${opt.svgUrl}`}
-                        style={[
-                          styles.assetOption,
-                          isSelected && styles.assetOptionSelected
-                        ]}
-                        onPress={() => handleAssetSelect(opt.svgUrl)}
-                      >
-                        <View style={styles.assetPreview}>
-                          {isNone ? (
-                            <View style={styles.noneOption}>
-                              <FontAwesome5 name="times" size={24} color="#9ca3af" />
-                              <Text style={styles.noneText}>None</Text>
-                            </View>
-                          ) : opt.storeImage ? (
-                            <ExpoImage
-                              source={{ uri: opt.storeImage }}
-                              style={{ width: 100, height: 100 }}
-                              contentFit="contain"
-                              cachePolicy="disk"
-                            />
-                          ) : (
-                            <View style={[styles.noneOption, { width: 100, height: 100 }]}>
-                              <Text style={styles.noneText}>Sin vista previa</Text>
-                            </View>
-                          )}
-                        </View>
-                        {isSelected && (
-                          <View style={styles.selectedIndicator}>
-                            <FontAwesome5 name="check" size={12} color="#fff" />
+              </FadeInView>
+            ) : (
+              <FadeInView from="bottom" delay={100} duration={450} style={styles.assetsGrid}>
+                {ownedOptionsForSelectedCategory.map((opt) => {
+                  const isNone = opt.svgUrl === 'none';
+                  const isSelected = getCurrentAssetKey() === opt.svgUrl;
+                  return (
+                    <TouchableOpacity
+                      key={`${selectedCategory}-${opt.id}-${opt.svgUrl}`}
+                      style={[
+                        styles.assetOption,
+                        isSelected && styles.assetOptionSelected
+                      ]}
+                      onPress={() => handleAssetSelect(opt.svgUrl)}
+                    >
+                      <View style={styles.assetPreview}>
+                        {isNone ? (
+                          <View style={styles.noneOption}>
+                            <FontAwesome5 name="times" size={24} color="#9ca3af" />
+                            <Text style={styles.noneText}>None</Text>
+                          </View>
+                        ) : opt.storeImage ? (
+                          <ExpoImage
+                            source={{ uri: opt.storeImage }}
+                            style={{ width: 100, height: 100 }}
+                            contentFit="contain"
+                            cachePolicy="disk"
+                          />
+                        ) : (
+                          <View style={[styles.noneOption, { width: 100, height: 100 }]}>
+                            <Text style={styles.noneText}>Sin vista previa</Text>
                           </View>
                         )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </FadeInView>
-              )}
-            </View>
+                      </View>
+                      {isSelected && (
+                        <View style={styles.selectedIndicator}>
+                          <FontAwesome5 name="check" size={12} color="#fff" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </FadeInView>
+            )}
           </ScrollView>
         </View>
       </SafeAreaView>

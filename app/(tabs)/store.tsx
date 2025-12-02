@@ -28,12 +28,14 @@ import { useAvatar } from '@/contexts/AvatarContext';
 import { useFontContext } from '@/contexts/FontsContext';
 import { useItemStore } from '@/hooks/useItemStore';
 import { incrementCurrentUserCoins, getUserInventoryProductIds, purchaseStoreItem } from '@/services/SupabaseService';
+import { router } from 'expo-router';
 
 export default function StoreScreen() {
   const { fontsLoaded } = useFontContext();
   const { avatar: userAvatar } = useAvatar();
   const { items: allItems, isLoadingItems, coins, setCoins, refreshCoins } = useItemStore();
 
+  const [showMoneyCalc, setShowMoneyCalc] = React.useState<boolean>(false);
   const [selectedCategory, setSelectedCategory] = React.useState<
     'skin' | 'hair' | 'eyes' | 'mouth' | 'clothes'
   >('eyes');
@@ -198,9 +200,13 @@ export default function StoreScreen() {
           {/* Header: avatar left, coins right */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <View style={styles.avatarCircle}>
+              <TouchableOpacity
+                onPress={() => router.push('/avatar-customization-screen')}
+                activeOpacity={0.8}
+                style={styles.avatarCircle}
+              >
                 <LayeredAvatar avatar={userAvatar} size={44} style={styles.layeredAvatar} />
-              </View>
+              </TouchableOpacity>
             </View>
             <View style={styles.headerRight}>
               <TouchableOpacity onPress={handleDebugAddCoins} activeOpacity={0.8} style={styles.coinsPill}>
@@ -213,9 +219,16 @@ export default function StoreScreen() {
           {/* Lottie mascot overlapping bottom */}
           <View style={styles.lottieWrap}>
             <LottieView
-              source={require('@/assets/lotties/extras/Calc.json')}
+              source={
+                showMoneyCalc
+                  ? require('@/assets/lotties/extras/Calc-money.json')
+                  : require('@/assets/lotties/extras/Calc.json')
+              }
               autoPlay
-              loop
+              loop={!showMoneyCalc}
+              onAnimationFinish={() => {
+                if (showMoneyCalc) setShowMoneyCalc(false);
+              }}
               style={styles.lottie}
             />
           </View>
@@ -308,6 +321,7 @@ export default function StoreScreen() {
                   const result = await purchaseStoreItem(productId, selectedItem.price);
                   if (result.status === 'purchased') {
                     setCoins(result.coins);
+                    setShowMoneyCalc(true);
                     setOwnedProductIds(prev => (prev.includes(productId) ? prev : [...prev, productId]));
                     setSelectedItem(null);
                   } else if (result.status === 'already_owned') {

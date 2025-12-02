@@ -1,7 +1,7 @@
 import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,7 +10,7 @@ import GameModeButton from '@/components/ui/GameModeButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useFontContext } from '@/contexts/FontsContext';
-import { getUserRankInfo, UserRankInfo } from '@/services/SupabaseService';
+import { useRank } from '@/contexts/RankContext';
 
 const { height } = Dimensions.get('window');
 
@@ -25,20 +25,7 @@ export default function PlayScreen() {
 
   const { avatar: userAvatar } = useAvatar();
   const { user } = useAuth();
-
-  const [rankInfo, setRankInfo] = useState<UserRankInfo | null>(null);
-  const [rankLoading, setRankLoading] = useState<boolean>(false);
-
-  useEffect(() => {
-    const fetchRank = async () => {
-      if (!user?.id) return;
-      setRankLoading(true);
-      const info = await getUserRankInfo(user.id);
-      setRankInfo(info);
-      setRankLoading(false);
-    };
-    fetchRank();
-  }, [user?.id]);
+  const { userRankInfo: rankInfo, loadingUserRank: rankLoading } = useRank();
 
   const rankColor = useMemo(() => {
     const color = rankInfo?.rank?.color || '#A855F7';
@@ -71,7 +58,7 @@ export default function PlayScreen() {
 
         {/* Rank banner + progress */}
         <View style={styles.rankWrap}>
-          <View style={styles.rankBadge}>
+          <TouchableOpacity style={styles.rankBadge} activeOpacity={0.8} onPress={() => router.push('/(modals)/rank-modal')}>
             {rankInfo?.rank?.icon_url ? (
               <Image source={{ uri: rankInfo.rank.icon_url }} style={styles.rankIcon} resizeMode="contain" />
             ) : (
@@ -83,7 +70,7 @@ export default function PlayScreen() {
             <Text style={[styles.rankPoints, { fontFamily: 'Gilroy-Black' }]}>
               {rankInfo?.points ?? 0} pts
             </Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.progressTrack}>
             <View
               style={[
@@ -113,6 +100,8 @@ export default function PlayScreen() {
             imagePath={require('@/assets/images/competitive/1v1_roulette.png')}
             onPress={() => router.push('/(games)/matchmaking-screen')}
           />
+          {/* TODO: Add how to play button */}
+          
         </View>
       </SafeAreaView>
       {/* Floating Leaderboard button to new screen */}
@@ -125,7 +114,7 @@ export default function PlayScreen() {
         >
           <LinearGradient colors={["#FFD45E", "#FFA500"]} style={styles.fabGradient}>
             <FontAwesome5 name="trophy" size={18} color="#fff" />
-            <Text style={styles.fabText}>Clasificación</Text>
+            <Text style={styles.fabText}>Ranking</Text>
           </LinearGradient>
         </TouchableOpacity>
       </Link>

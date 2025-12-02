@@ -1,4 +1,5 @@
 import AuthService from '@/Core/Services/AuthService/AuthService';
+import { Avatar } from '@/types/avatar';
 
 export type MatchRow = {
   id: string;
@@ -22,6 +23,151 @@ export type UserStats = {
 };
 
 const supabase = AuthService.getClient();
+
+// -------------------- AVATARS --------------------
+export type AvatarRow = {
+  id: string;
+  profile_id: string;
+  skin_asset: string;
+  hair_asset: string | null;
+  eyes_asset: string;
+  mouth_asset: string | null;
+  clothes_asset: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+/**
+ * Fetch the current authenticated user's avatar from 'avatars' table.
+ */
+export async function getCurrentUserAvatar(): Promise<Avatar | null> {
+  try {
+    const { data: authData } = await supabase.auth.getUser();
+    const userId = authData?.user?.id ?? null;
+    if (!userId) return null;
+    const { data, error } = await supabase
+      .from('avatars')
+      .select('profile_id, skin_asset, hair_asset, eyes_asset, mouth_asset, clothes_asset')
+      .eq('profile_id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      skin_asset: data.skin_asset as string,
+      hair_asset: (data.hair_asset as string | null) ?? undefined,
+      eyes_asset: data.eyes_asset as string,
+      mouth_asset: (data.mouth_asset as string | null) ?? undefined,
+      clothes_asset: data.clothes_asset as string,
+    };
+  } catch (e) {
+    console.error('Error fetching current user avatar:', e);
+    return null;
+  }
+}
+
+/**
+ * Upsert the current authenticated user's avatar.
+ * If a row exists for profile_id, updates it; otherwise inserts a new one.
+ */
+export async function upsertCurrentUserAvatar(avatar: Avatar): Promise<Avatar | null> {
+  try {
+    const { data: authData } = await supabase.auth.getUser();
+    const userId = authData?.user?.id ?? null;
+    if (!userId) return null;
+
+    // Check if avatar exists
+    const { data: existing } = await supabase
+      .from('avatars')
+      .select('id')
+      .eq('profile_id', userId)
+      .maybeSingle();
+
+    if (existing?.id) {
+      const { error: updateError } = await supabase
+        .from('avatars')
+        .update({
+          skin_asset: avatar.skin_asset,
+          hair_asset: avatar.hair_asset ?? null,
+          eyes_asset: avatar.eyes_asset,
+          mouth_asset: avatar.mouth_asset ?? null,
+          clothes_asset: avatar.clothes_asset,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id);
+      if (updateError) throw updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('avatars')
+        .insert({
+          profile_id: userId,
+          skin_asset: avatar.skin_asset,
+          hair_asset: avatar.hair_asset ?? null,
+          eyes_asset: avatar.eyes_asset,
+          mouth_asset: avatar.mouth_asset ?? null,
+          clothes_asset: avatar.clothes_asset,
+        });
+      if (insertError) throw insertError;
+    }
+    return avatar;
+  } catch (e) {
+    console.error('Error upserting current user avatar:', e);
+    return null;
+  }
+}
+
+/**
+ * Fetch avatar for a specific profile id.
+ */
+export async function getUserAvatar(profileId: string): Promise<Avatar | null> {
+  try {
+    const { data, error } = await supabase
+      .from('avatars')
+      .select('profile_id, skin_asset, hair_asset, eyes_asset, mouth_asset, clothes_asset')
+      .eq('profile_id', profileId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      skin_asset: data.skin_asset as string,
+      hair_asset: (data.hair_asset as string | null) ?? undefined,
+      eyes_asset: data.eyes_asset as string,
+      mouth_asset: (data.mouth_asset as string | null) ?? undefined,
+      clothes_asset: data.clothes_asset as string,
+    };
+  } catch (e) {
+    console.error('Error fetching user avatar:', e);
+    return null;
+  }
+}
+
+/**
+ * Batch fetch avatars for multiple profile ids. Returns a map keyed by profile_id.
+ */
+export async function getAvatarsForProfileIds(profileIds: string[]): Promise<Record<string, Avatar>> {
+  const uniqueIds = Array.from(new Set(profileIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return {};
+  try {
+    const { data, error } = await supabase
+      .from('avatars')
+      .select('profile_id, skin_asset, hair_asset, eyes_asset, mouth_asset, clothes_asset')
+      .in('profile_id', uniqueIds);
+    if (error) throw error;
+    const result: Record<string, Avatar> = {};
+    (data || []).forEach((row: any) => {
+      result[row.profile_id] = {
+        skin_asset: row.skin_asset as string,
+        hair_asset: (row.hair_asset as string | null) ?? undefined,
+        eyes_asset: row.eyes_asset as string,
+        mouth_asset: (row.mouth_asset as string | null) ?? undefined,
+        clothes_asset: row.clothes_asset as string,
+      };
+    });
+    return result;
+  } catch (e) {
+    console.error('Error fetching avatars for profile ids:', e);
+    return {};
+  }
+}
 
 // Obtiene estadísticas del usuario, incluyendo la partida más reciente
 export async function getUserStats(userId: string): Promise<UserStats | null> {
@@ -148,6 +294,23 @@ export type RankRow = {
   color: string | null;
 };
 
+/**
+ * Returns all ranks ordered by min_points ascending.
+ */
+export async function getAllRanks(): Promise<RankRow[]> {
+  try {
+    const { data, error } = await supabase
+      .from('ranks')
+      .select('id, name, min_points, max_points, icon_url, color')
+      .order('min_points', { ascending: true });
+    if (error) throw error;
+    return (data || []) as RankRow[];
+  } catch (error) {
+    console.error('Error fetching ranks:', error);
+    return [];
+  }
+}
+
 export type UserRankInfo = {
   points: number;
   rank: RankRow | null;
@@ -161,6 +324,7 @@ export type LeaderboardEntry = {
   username: string;
   points: number;
   rank: RankRow | null;
+  avatar: Avatar | null;
 };
 
 /**
@@ -319,12 +483,35 @@ export async function getLeaderboard(limit: number = 50): Promise<LeaderboardEnt
       });
     }
 
-    // 3) Merge and return
+    // 3) Fetch avatars in a single query
+    const userIds = rows.map(r => r.id);
+    const avatarMap = await (async () => {
+      const map = new Map<string, Avatar>();
+      if (userIds.length === 0) return map;
+      const { data: avRows, error: avError } = await supabase
+        .from('avatars')
+        .select('profile_id, skin_asset, hair_asset, eyes_asset, mouth_asset, clothes_asset')
+        .in('profile_id', userIds);
+      if (avError) return map;
+      (avRows || []).forEach((row: any) => {
+        map.set(row.profile_id, {
+          skin_asset: row.skin_asset as string,
+          hair_asset: (row.hair_asset as string | null) ?? undefined,
+          eyes_asset: row.eyes_asset as string,
+          mouth_asset: (row.mouth_asset as string | null) ?? undefined,
+          clothes_asset: row.clothes_asset as string,
+        });
+      });
+      return map;
+    })();
+
+    // 4) Merge and return
     const result: LeaderboardEntry[] = rows.map((r) => ({
       id: r.id,
       username: (r.username ?? 'Usuario') as string,
       points: Number(r.points ?? 0),
       rank: r.rank_id ? rankMap.get(r.rank_id) ?? null : null,
+      avatar: avatarMap.get(r.id) ?? null,
     }));
     return result;
   } catch (error) {

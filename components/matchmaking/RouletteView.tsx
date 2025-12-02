@@ -8,6 +8,7 @@ type Face = {
   username: string;
   avatarComponent: React.ReactNode;
   score?: number;
+  roundsWon?: number;
 };
 
 type Props = {
@@ -104,8 +105,9 @@ const computeLandedIndex = (angle: number) => {
             <View style={styles.avatarCircle}>{me?.avatarComponent}</View>
             <Text style={[styles.scoreText, { fontFamily: 'Digitalt' }]}>{String(me?.score ?? 0).padStart(2, '0')}</Text>
             <Text style={[styles.usernameText, { fontFamily: 'Digitalt' }]} numberOfLines={1}>
-              {me?.username?.toUpperCase() || 'YO'}
+              {me?.username?.toUpperCase() || 'TU'}
             </Text>
+            <Text style={[styles.roundsText, { fontFamily: 'Digitalt' }]}>🏆 {String(me?.roundsWon ?? 0)}</Text>
           </View>
           {/* Right player */}
           <View style={styles.playerCol}>
@@ -114,6 +116,7 @@ const computeLandedIndex = (angle: number) => {
             <Text style={[styles.usernameText, { fontFamily: 'Digitalt' }]} numberOfLines={1}>
               {opponent?.username?.toUpperCase() || 'OPONENTE'}
             </Text>
+            <Text style={[styles.roundsText, { fontFamily: 'Digitalt' }]}>🏆 {String(opponent?.roundsWon ?? 0)}</Text>
           </View>
         </View>
       )}
@@ -200,6 +203,7 @@ const styles = StyleSheet.create({
   labelWrap: { position: 'absolute', bottom: 80, alignItems: 'center' },
   labelText: { color: '#FFFFFF', opacity: 0.85, fontSize: 14, letterSpacing: 1 },
   labelName: { color: '#FFFFFF', fontSize: 20, fontWeight: '900', letterSpacing: 1.5, marginTop: 4 },
+  roundsText: { color: '#FFD45E', fontSize: 11, marginTop: 2 },
 });
 
 

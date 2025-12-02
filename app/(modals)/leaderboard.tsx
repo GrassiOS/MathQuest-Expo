@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { getLeaderboard, LeaderboardEntry } from '@/services/SupabaseService';
 import { FadeInView } from '@/components/shared/FadeInView';
+import { LayeredAvatar } from '@/components/LayeredAvatar';
 
 const { width } = Dimensions.get('window');
 
@@ -110,11 +111,17 @@ export default function LeaderboardModal() {
               return (
                 <FadeInView key={e.id} from="right" delay={80 + idx * 40} distance={18}>
                   <View style={[styles.cardRow, isCurrent && styles.cardRowCurrent]}>
-                    <LinearGradient colors={['#FFFFFF', 'rgba(255,255,255,0.8)']} style={styles.cardAvatarWrap}>
-                      <Text style={[styles.initialText, { color: '#6C55F7' }]}>
-                        {(e.username || 'U').slice(0, 1).toUpperCase()}
-                      </Text>
-                    </LinearGradient>
+                    {e.avatar ? (
+                      <View style={[styles.cardAvatarWrap, { backgroundColor: '#fff' }]}>
+                        <LayeredAvatar avatar={e.avatar} size={42} />
+                      </View>
+                    ) : (
+                      <LinearGradient colors={['#FFFFFF', 'rgba(255,255,255,0.8)']} style={styles.cardAvatarWrap}>
+                        <Text style={[styles.initialText, { color: '#6C55F7' }]}>
+                          {(e.username || 'U').slice(0, 1).toUpperCase()}
+                        </Text>
+                      </LinearGradient>
+                    )}
                     <View style={styles.cardTextWrap}>
                       <Text style={[styles.username, isCurrent && styles.usernameCurrent]}>@{e.username}</Text>
                       <Text style={styles.pointsSmall}>({e.points})</Text>
@@ -156,11 +163,17 @@ function PodiumSpot({ place, entry, highlight, style }: PodiumSpotProps) {
   return (
     <View style={[styles.spotWrap, style]}>
       <View style={styles.spotAvatarShadow}>
-        <LinearGradient colors={['#FFFFFF', '#EDEBFF']} style={[styles.initialCircle, styles.spotAvatar]}>
-          <Text style={[styles.initialText, { color: '#6C55F7', fontSize: 30 }]}>
-            {(entry?.username || 'U').slice(0, 1).toUpperCase()}
-          </Text>
-        </LinearGradient>
+        {entry?.avatar ? (
+          <View style={[styles.initialCircle, styles.spotAvatar, { backgroundColor: '#fff' }]}>
+            <LayeredAvatar avatar={entry.avatar} size={72} />
+          </View>
+        ) : (
+          <LinearGradient colors={['#FFFFFF', '#EDEBFF']} style={[styles.initialCircle, styles.spotAvatar]}>
+            <Text style={[styles.initialText, { color: '#6C55F7', fontSize: 30 }]}>
+              {(entry?.username || 'U').slice(0, 1).toUpperCase()}
+            </Text>
+          </LinearGradient>
+        )}
       </View>
       <Text style={[styles.spotUsername, highlight && styles.usernameCurrent]}>
         @{entry?.username ?? '—'}

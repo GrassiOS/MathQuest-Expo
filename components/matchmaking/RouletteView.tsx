@@ -9,6 +9,7 @@ type Face = {
   avatarComponent: React.ReactNode;
   score?: number;
   roundsWon?: number;
+  totalScore?: number;
 };
 
 type Props = {
@@ -103,20 +104,18 @@ const computeLandedIndex = (angle: number) => {
           {/* Left player */}
           <View style={styles.playerCol}>
             <View style={styles.avatarCircle}>{me?.avatarComponent}</View>
-            <Text style={[styles.scoreText, { fontFamily: 'Digitalt' }]}>{String(me?.score ?? 0).padStart(2, '0')}</Text>
+            <Text style={[styles.scoreText, { fontFamily: 'Digitalt' }]}>{String((me?.totalScore ?? me?.score ?? 0)).padStart(2, '0')}</Text>
             <Text style={[styles.usernameText, { fontFamily: 'Digitalt' }]} numberOfLines={1}>
-              {me?.username?.toUpperCase() || 'TU'}
+              @{me?.username?.toUpperCase() || 'TU'}
             </Text>
-            <Text style={[styles.roundsText, { fontFamily: 'Digitalt' }]}>🏆 {String(me?.roundsWon ?? 0)}</Text>
           </View>
           {/* Right player */}
           <View style={styles.playerCol}>
             <View style={styles.avatarCircle}>{opponent?.avatarComponent}</View>
-            <Text style={[styles.scoreText, { fontFamily: 'Digitalt' }]}>{String(opponent?.score ?? 0).padStart(2, '0')}</Text>
+            <Text style={[styles.scoreText, { fontFamily: 'Digitalt' }]}>{String((opponent?.totalScore ?? opponent?.score ?? 0)).padStart(2, '0')}</Text>
             <Text style={[styles.usernameText, { fontFamily: 'Digitalt' }]} numberOfLines={1}>
-              {opponent?.username?.toUpperCase() || 'OPONENTE'}
+              @{opponent?.username?.toUpperCase() || 'OPONENTE'}
             </Text>
-            <Text style={[styles.roundsText, { fontFamily: 'Digitalt' }]}>🏆 {String(opponent?.roundsWon ?? 0)}</Text>
           </View>
         </View>
       )}
@@ -128,18 +127,6 @@ const computeLandedIndex = (angle: number) => {
         </Animated.View>
       </View>
       {/* Center circle */}
-      <View style={styles.centerCircle} />
-      {selectedCategory || landedId ? (
-        <View style={styles.labelWrap}>
-          <Text style={[styles.labelText, { fontFamily: 'Digitalt' }]}>CATEGORÍA</Text>
-          <Text style={[
-            styles.labelName,
-            { fontFamily: 'Digitalt', color: selectedCategory?.color || '#FFFFFF' }
-          ]}>
-            {selectedCategory?.emoji || '🎯'} {(selectedCategory?.name || landedId || '').toString().toUpperCase()}
-          </Text>
-        </View>
-      ) : null}
     </View>
   );
 }

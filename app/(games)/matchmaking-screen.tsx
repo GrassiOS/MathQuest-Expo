@@ -89,6 +89,7 @@ export default function MatchmakingScreen() {
   const [isExitingMatchFound, setIsExitingMatchFound] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<{ id: string; name: string; emoji: string; color: string } | undefined>(undefined);
   const [eloInfo, setEloInfo] = useState<{ currentElo: number; beforeElo: number } | null>(null);
+  const [cumulativeTotals, setCumulativeTotals] = useState<{ p1: number; p2: number }>({ p1: 0, p2: 0 });
 
   // Quiz state
   type Exercise = { id: string; question: string; answer: number; options?: number[]; category: string; startTime?: number };
@@ -124,6 +125,8 @@ export default function MatchmakingScreen() {
     onPlayerFound((data) => {
       setOpponent(data.opponent ?? null);
       if (data.selectedCategory) setSelectedCategory(data.selectedCategory);
+      // Reset cumulative totals at the start of a new match
+      setCumulativeTotals({ p1: 0, p2: 0 });
       // Trigger exit animation in matchmaking view first
       setIsExitingMatchmaking(true);
       // Signal readiness to start the game so server can send exercises
@@ -146,6 +149,10 @@ export default function MatchmakingScreen() {
       // Data shape documented in server/WEBSOCKET_MESSAGES.md
       setGameData(data);
       setSelectedCategory(data?.category);
+      // If the round number is 1, ensure we reset the local cumulative totals
+      if ((data?.roundNumber || 1) === 1) {
+        setCumulativeTotals({ p1: 0, p2: 0 });
+      }
       setExercises(Array.isArray(data?.exercises) ? data.exercises : []);
       setQuestionIndex(0);
       setAnswerText('');
@@ -160,6 +167,16 @@ export default function MatchmakingScreen() {
   useEffect(() => {
     onRoundFinished((data) => {
       setGameData(data);
+      // Update cumulative totals using server totals if provided, otherwise add this round's scores
+      setCumulativeTotals((prev) => {
+        const nextP1 = typeof data?.player1TotalScore === 'number'
+          ? Number(data.player1TotalScore)
+          : prev.p1 + Number(data?.player1Score ?? 0);
+        const nextP2 = typeof data?.player2TotalScore === 'number'
+          ? Number(data.player2TotalScore)
+          : prev.p2 + Number(data?.player2Score ?? 0);
+        return { p1: Math.max(0, nextP1), p2: Math.max(0, nextP2) };
+      });
       // Skip animated transition to results to preserve scoring/flow
       setIsTransitioningFromQuiz(false);
       setGameState('ROUND_RESULT');
@@ -434,12 +451,14 @@ export default function MatchmakingScreen() {
               me={{
                 username: (gameData?.player1Username || myUsername || 'P1').toString(),
                 avatarComponent: <LayeredAvatar avatar={avatar} size={56} />,
-                score: gameData?.player1Score ?? 0,
+                // Show cumulative total up to this point; prefer server total if present
+                totalScore: (typeof gameData?.player1TotalScore === 'number' ? gameData?.player1TotalScore : cumulativeTotals.p1),
               }}
               opponent={{
                 username: (gameData?.player2Username || opponent?.username || 'P2').toString(),
                 avatarComponent: <LayeredAvatar avatar={avatar} size={56} />,
-                score: gameData?.player2Score ?? 0,
+                // Show cumulative total up to this point; prefer server total if present
+                totalScore: (typeof gameData?.player2TotalScore === 'number' ? gameData?.player2TotalScore : cumulativeTotals.p2),
               }}
               onSpinComplete={() => {
                 // Ensure exercises are loaded before entering the quiz

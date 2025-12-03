@@ -1,8 +1,8 @@
 import { FontAwesome5 } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
-import React, { useMemo } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,7 +11,7 @@ import GameModeButton from '@/components/ui/GameModeButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useFontContext } from '@/contexts/FontsContext';
-import { useRank } from '@/contexts/RankContext';
+import { getAllRanks, getUserRankInfo, UserRankInfo } from '@/services/SupabaseService';
 
 const { height } = Dimensions.get('window');
 
@@ -26,7 +26,30 @@ export default function PlayScreen() {
 
   const { avatar: userAvatar } = useAvatar();
   const { user } = useAuth();
-  const { userRankInfo: rankInfo, loadingUserRank: rankLoading, refreshUserRank, refreshRanks } = useRank();
+  const [rankInfo, setRankInfo] = useState<UserRankInfo | null>(null);
+  const [rankLoading, setRankLoading] = useState<boolean>(false);
+
+  const refreshUserRank = useCallback(async () => {
+    if (!user?.id) {
+      setRankInfo(null);
+      return;
+    }
+    setRankLoading(true);
+    try {
+      const remote = await getUserRankInfo(user.id);
+      setRankInfo(remote ?? null);
+    } finally {
+      setRankLoading(false);
+    }
+  }, [user?.id]);
+
+  const refreshRanks = useCallback(async () => {
+    try {
+      await getAllRanks();
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const rankColor = useMemo(() => {
     const color = rankInfo?.rank?.color || '#A855F7';
@@ -38,8 +61,8 @@ export default function PlayScreen() {
   useFocusEffect(
     React.useCallback(() => {
       // Bypass cache to ensure latest ELO/Rank
-      refreshUserRank(true);
-      refreshRanks(true);
+      refreshUserRank();
+      refreshRanks();
       return undefined;
     }, [refreshUserRank, refreshRanks])
   );

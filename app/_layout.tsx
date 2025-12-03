@@ -4,7 +4,6 @@ import { AvatarProvider } from '@/contexts/AvatarContext';
 import { FontProvider } from '@/contexts/FontsContext';
 import { GameProvider } from '@/contexts/GameContext';
 import { OfflineStorageProvider } from '@/contexts/OfflineStorageContext';
-import { RankProvider } from '@/contexts/RankContext';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -51,31 +50,29 @@ export default function RootLayout() {
           <AvatarProvider>
             <GameProvider>
               <OfflineStorageProvider>
-                <RankProvider>
-                  <>
-                    <Slot />
-                    {showSplash && (
-                      <Animated.View style={[StyleSheet.absoluteFill, styles.splashOverlay, { opacity: splashOpacity }]}>
-                        <LottieView
-                          source={require('../assets/lotties/extras/Splash.json')}
-                          autoPlay
-                          loop={false}
-                          style={styles.lottie}
-                          onAnimationFinish={() => {
-                            Animated.timing(splashOpacity, {
-                              toValue: 0,
-                              duration: 400,
-                              useNativeDriver: true,
-                            }).start(() => {
-                              didShowAnimatedSplash = true;
-                              setShowSplash(false);
-                            });
-                          }}
-                        />
-                      </Animated.View>
-                    )}
-                  </>
-                </RankProvider>
+                <>
+                  <Slot />
+                  {showSplash && (
+                    <Animated.View style={[StyleSheet.absoluteFill, styles.splashOverlay, { opacity: splashOpacity }]}>
+                      <LottieView
+                        source={require('../assets/lotties/extras/Splash.json')}
+                        autoPlay
+                        loop={false}
+                        style={styles.lottie}
+                        onAnimationFinish={() => {
+                          Animated.timing(splashOpacity, {
+                            toValue: 0,
+                            duration: 400,
+                            useNativeDriver: true,
+                          }).start(() => {
+                            didShowAnimatedSplash = true;
+                            setShowSplash(false);
+                          });
+                        }}
+                      />
+                    </Animated.View>
+                  )}
+                </>
               </OfflineStorageProvider>
             </GameProvider>
           </AvatarProvider>

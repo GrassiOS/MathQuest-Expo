@@ -1,20 +1,48 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Medal, X } from 'phosphor-react-native';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AnimatedMathBackground from '@/components/ui/AnimatedMathBackground';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFontContext } from '@/contexts/FontsContext';
-import { useRank } from '@/contexts/RankContext';
+import { getAllRanks, getUserRankInfo, RankRow, UserRankInfo } from '@/services/SupabaseService';
 
 export default function RankModal() {
   const { user } = useAuth();
   const { fontsLoaded } = useFontContext();
-  const { userRankInfo: rankInfo, ranks, loadingRanks, loadingUserRank } = useRank();
+  const [ranks, setRanks] = useState<RankRow[]>([]);
+  const [rankInfo, setRankInfo] = useState<UserRankInfo | null>(null);
+  const [loadingRanks, setLoadingRanks] = useState<boolean>(false);
+  const [loadingUserRank, setLoadingUserRank] = useState<boolean>(false);
   const loading = loadingRanks || loadingUserRank;
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      setLoadingRanks(true);
+      setLoadingUserRank(true);
+      try {
+        const [r, u] = await Promise.all([
+          getAllRanks(),
+          user?.id ? getUserRankInfo(user.id) : Promise.resolve(null),
+        ]);
+        if (mounted) {
+          setRanks(Array.isArray(r) ? r : []);
+          setRankInfo(u ?? null);
+        }
+      } finally {
+        if (mounted) {
+          setLoadingRanks(false);
+          setLoadingUserRank(false);
+        }
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [user?.id]);
 
   const currentRankId = rankInfo?.rank?.id ?? null;
   const currentIndex = useMemo(() => {

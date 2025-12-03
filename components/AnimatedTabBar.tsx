@@ -1,10 +1,10 @@
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import {
-    MapTrifoldIcon,
-    PuzzlePieceIcon,
-    ShoppingCartSimpleIcon,
-    SwordIcon,
-    UserIcon
+  MapTrifoldIcon,
+  PuzzlePieceIcon,
+  ShoppingCartSimpleIcon,
+  SwordIcon,
+  UserIcon
 } from 'phosphor-react-native';
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -138,33 +138,42 @@ export function AnimatedTabBar({
 }: BottomTabBarProps) {
   return (
     <View style={styles.tabBar}>
-      {state.routes.map((route, index) => {
-        const { options } = descriptors[route.key];
-        const label = options.title || route.name;
-        const isFocused = state.index === index;
+      {state.routes
+        .filter((route) => {
+          const href = (descriptors[route.key] as any)?.options?.href;
+          // Hide tabs when expo-router sets href: null (e.g., Quest)
+          if (href === null) return false;
+          // Also explicitly hide the "index" route (Quest) from the tab bar
+          if (route.name === 'index') return false;
+          return true;
+        })
+        .map((route) => {
+          const { options } = descriptors[route.key];
+          const label = options.title || route.name;
+          const isFocused = state.routes[state.index]?.name === route.name;
 
-        const onPress = () => {
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: route.key,
-            canPreventDefault: true,
-          });
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
 
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(route.name);
-          }
-        };
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
 
-        return (
-          <AnimatedTab
-            key={route.key}
-            route={route}
-            isFocused={isFocused}
-            onPress={onPress}
-            label={label}
-          />
-        );
-      })}
+          return (
+            <AnimatedTab
+              key={route.key}
+              route={route}
+              isFocused={isFocused}
+              onPress={onPress}
+              label={label}
+            />
+          );
+        })}
     </View>
   );
 }

@@ -2,6 +2,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
 import React, { useMemo } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -25,13 +26,23 @@ export default function PlayScreen() {
 
   const { avatar: userAvatar } = useAvatar();
   const { user } = useAuth();
-  const { userRankInfo: rankInfo, loadingUserRank: rankLoading } = useRank();
+  const { userRankInfo: rankInfo, loadingUserRank: rankLoading, refreshUserRank, refreshRanks } = useRank();
 
   const rankColor = useMemo(() => {
     const color = rankInfo?.rank?.color || '#A855F7';
     // Ensure color is a hex or valid CSS color, else fallback
     return color || '#A855F7';
   }, [rankInfo]);
+
+  // Force refresh rank data whenever this screen gains focus (e.g., after a match)
+  useFocusEffect(
+    React.useCallback(() => {
+      // Bypass cache to ensure latest ELO/Rank
+      refreshUserRank(true);
+      refreshRanks(true);
+      return undefined;
+    }, [refreshUserRank, refreshRanks])
+  );
 
   if (!fontsLoaded) {
     return (

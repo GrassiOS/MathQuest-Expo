@@ -9,12 +9,16 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
       }}>
+        {/* Hide index tab
       <Tabs.Screen
         name="index"
         options={{
           title: 'QUEST',
+          href: null,
         }}
+        
       />
+      */}
       <Tabs.Screen
         name="extras"
         options={{

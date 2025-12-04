@@ -11,7 +11,7 @@ import LottieView from 'lottie-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 
-// Keep the native splash up until our React overlay is ready
+
 void SplashScreen.preventAutoHideAsync();
 
 const SPLASH_PURPLE = '#7B4DFF';
@@ -22,7 +22,7 @@ export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(() => !didShowAnimatedSplash);
   const splashOpacity = useRef(new Animated.Value(1)).current;
 
-  // As soon as our overlay is mounted, hide the native splash for a seamless handoff
+
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
   }, []);

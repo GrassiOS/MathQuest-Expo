@@ -1,9 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { BookOpenText, CheckCircle, Clock, DiceFour, Medal, Trophy, X } from 'phosphor-react-native';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BookOpenText, CheckCircle, Clock, DiceFour, Medal, Trophy, X } from 'phosphor-react-native';
 
 import AnimatedMathBackground from '@/components/ui/AnimatedMathBackground';
 import { useFontContext } from '@/contexts/FontsContext';
@@ -25,38 +25,38 @@ export default function HowToPlayModal() {
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.ruleRow}>
             <Trophy size={22} color="#FFFFFF" weight="fill" />
-            <Text style={styles.ruleText}>3 RONDAS</Text>
+            <Text style={[styles.ruleText, { fontFamily: 'Gilroy-Black' }]}>3 RONDAS</Text>
           </View>
           <View style={styles.ruleRow}>
             <DiceFour size={22} color="#FFFFFF" weight="fill" />
-            <Text style={styles.ruleText}>
-              AL EMPEZAR CADA RONDA, SE GIRARÁ UNA RULETA PARA DETERMINAR LA CATEGORIA (SUMA, RESTA, MULTIPLICACIÓN, DIVISIÓN, HÍBRIDO)
+            <Text style={[styles.ruleText, { fontFamily: 'Gilroy-Black' }]}>
+              AL EMPEZAR CADA RONDA, SE GIRARÁ UNA RULETA PARA DETERMINAR LA CATEGORIA
             </Text>
           </View>
           <View style={styles.ruleRow}>
             <BookOpenText size={22} color="#FFFFFF" weight="fill" />
-            <Text style={styles.ruleText}>6 PREGUNTAS POR RONDA</Text>
+            <Text style={[styles.ruleText, { fontFamily: 'Gilroy-Black' }]}>6 PREGUNTAS POR RONDA</Text>
           </View>
           <View style={styles.ruleRow}>
             <CheckCircle size={22} color="#34C759" weight="fill" />
-            <Text style={styles.ruleText}>PREGUNTA CORRECTA = +100 PUNTOS</Text>
+            <Text style={[styles.ruleText, { fontFamily: 'Gilroy-SemiBold' }]}>PREGUNTA CORRECTA = +100 PUNTOS</Text>
           </View>
           <View style={styles.ruleRow}>
             <Clock size={22} color="#FFD45E" weight="fill" />
-            <Text style={styles.ruleText}>EL PRIMERO EN TERMINAR = +50 PUNTOS</Text>
+            <Text style={[styles.ruleText, { fontFamily: 'Gilroy-SemiBold' }]}>EL PRIMERO EN TERMINAR = +50 PUNTOS</Text>
           </View>
           <View style={styles.ruleRow}>
             <Medal size={22} color="#FFD45E" weight="fill" />
-            <Text style={styles.ruleText}>GANA QUIEN ACUMULE MÁS PUNTOS EN LAS 3 RONDAS</Text>
+            <Text style={[styles.ruleText, { fontFamily: 'Gilroy-SemiBold' }]}>GANA QUIEN ACUMULE MÁS PUNTOS EN LAS 3 RONDAS</Text>
           </View>
           <View style={[styles.divider, { marginVertical: 12 }]} />
           <View style={styles.ruleRow}>
             <Trophy size={22} color="#FFD700" weight="fill" />
-            <Text style={styles.ruleText}>SI GANAS: +30 ELO (MÁS MONEDAS)</Text>
+            <Text style={[styles.ruleText, { fontFamily: 'Gilroy-Black' }]}>SI GANAS: +30 ELO (MÁS MONEDAS)</Text>
           </View>
           <View style={styles.ruleRow}>
             <Trophy size={22} color="#FF3B30" weight="fill" />
-            <Text style={styles.ruleText}>SI PIERDES: -25 ELO (MENOS MONEDAS, IGUAL RECIBES)</Text>
+            <Text style={[styles.ruleText, { fontFamily: 'Gilroy-Black' }]}>SI PIERDES: -25 ELO (MENOS MONEDAS, IGUAL RECIBES)</Text>
           </View>
         </ScrollView>
       </SafeAreaView>

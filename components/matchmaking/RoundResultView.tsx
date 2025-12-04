@@ -1,6 +1,6 @@
+import LottieView from 'lottie-react-native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
-import LottieView from 'lottie-react-native';
 
 type Props = {
   roundNumber: number;

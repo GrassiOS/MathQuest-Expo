@@ -125,7 +125,7 @@ export default function PlayScreen() {
 
 
 
-        {/* Game mode buttons */}
+
         <View style={styles.buttonsWrap}>
 
           <GameModeButton
@@ -135,7 +135,6 @@ export default function PlayScreen() {
             imagePath={require('@/assets/images/competitive/1v1_roulette.png')}
             onPress={() => router.push('/(games)/matchmaking-screen')}
           />
-          {/* Cómo jugar button */}
           <TouchableOpacity
             activeOpacity={0.9}
             style={styles.howToPlayButton}
@@ -149,7 +148,7 @@ export default function PlayScreen() {
           
         </View>
       </SafeAreaView>
-      {/* Floating Leaderboard button to new screen */}
+
       <Link href="/(modals)/leaderboard" asChild>
         <TouchableOpacity
           style={styles.fab}

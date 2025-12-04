@@ -11,16 +11,17 @@ import MatchmakingView from '@/components/matchmaking/MatchmakingView';
 import QuizView from '@/components/matchmaking/QuizView';
 import RouletteView from '@/components/matchmaking/RouletteView';
 import RoundResultView from '@/components/matchmaking/RoundResultView';
+import { defaultAvatar } from '@/constants/avatarAssets';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useFontContext } from '@/contexts/FontsContext';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { getUserElo } from '@/services/SupabaseService';
+import { getUserAvatar, getUserElo } from '@/services/SupabaseService';
+import { Avatar } from '@/types/avatar';
 import LottieView from 'lottie-react-native';
 
 type GameState = 'MATCHMAKING' | 'MATCH_FOUND' | 'ROULETTE' | 'QUIZ' | 'ROUND_RESULT' | 'MATCH_END';
 
-// Simple color helpers for gradient generation
 function clamp(n: number, min = 0, max = 255) { return Math.min(max, Math.max(min, n)); }
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   const normalized = hex.replace('#', '');
@@ -91,6 +92,7 @@ export default function MatchmakingScreen() {
   const [eloInfo, setEloInfo] = useState<{ currentElo: number; beforeElo: number } | null>(null);
   const [cumulativeTotals, setCumulativeTotals] = useState<{ p1: number; p2: number }>({ p1: 0, p2: 0 });
   const [roundBeforeTotals, setRoundBeforeTotals] = useState<{ p1: number; p2: number }>({ p1: 0, p2: 0 });
+  const [opponentAvatar, setOpponentAvatar] = useState<Avatar | null>(null);
 
   // Quiz state
   type Exercise = { id: string; question: string; answer: number; options?: number[]; category: string; startTime?: number };
@@ -121,16 +123,29 @@ export default function MatchmakingScreen() {
   const myUserId = useMemo(() => user?.id ?? `guest_${Date.now()}`, [user?.id]);
   const myUsername = useMemo(() => (user?.username || user?.email || 'Jugador').toString(), [user?.username, user?.email]);
 
-  // Setup listener for when a player is found
+  // ENCONTRADO!
   useEffect(() => {
     onPlayerFound((data) => {
       setOpponent(data.opponent ?? null);
       if (data.selectedCategory) setSelectedCategory(data.selectedCategory);
-      // Reset cumulative totals at the start of a new match
+      const opponentId = data?.opponent?.userId;
+      if (opponentId) {
+        (async () => {
+          try {
+            const av = await getUserAvatar(opponentId);
+            if (av) {
+              setOpponentAvatar(av);
+              setGameData((prev: any) => (prev ? { ...prev, opponentAvatar: av } : prev));
+            }
+          } catch {
+          }
+        })();
+      }
+
       setCumulativeTotals({ p1: 0, p2: 0 });
-      // Trigger exit animation in matchmaking view first
+
       setIsExitingMatchmaking(true);
-      // Signal readiness to start the game so server can send exercises
+
       websocketService.emit('start-game', {
         roomId: data.roomId,
         userId: myUserId,
@@ -139,18 +154,17 @@ export default function MatchmakingScreen() {
     });
   }, [onPlayerFound]);
 
-  // Listen to queue position updates
+
   useEffect(() => {
     onQueueUpdate((pos) => setQueuePosition(pos));
   }, [onQueueUpdate]);
 
-  // Listen to round started
+
   useEffect(() => {
     onRoundStarted((data) => {
-      // Data shape documented in server/WEBSOCKET_MESSAGES.md
-      setGameData(data);
+
+      setGameData(opponentAvatar ? { ...data, opponentAvatar } : data);
       setSelectedCategory(data?.category);
-      // If the round number is 1, ensure we reset the local cumulative totals
       if ((data?.roundNumber || 1) === 1) {
         setCumulativeTotals({ p1: 0, p2: 0 });
       }
@@ -164,10 +178,10 @@ export default function MatchmakingScreen() {
     });
   }, [onRoundStarted]);
 
-  // Listen to round finished → play exit transition from QUIZ
+  // rONNDA Terminada
   useEffect(() => {
     onRoundFinished((data) => {
-      setGameData(data);
+      setGameData(opponentAvatar ? { ...data, opponentAvatar } : data);
       setRoundBeforeTotals({
         p1: typeof data?.player1TotalScore === 'number' && typeof data?.player1Score === 'number'
           ? Math.max(0, Number(data.player1TotalScore) - Number(data.player1Score))
@@ -176,7 +190,6 @@ export default function MatchmakingScreen() {
           ? Math.max(0, Number(data.player2TotalScore) - Number(data.player2Score))
           : cumulativeTotals.p2,
       });
-      // Update cumulative totals using server totals if provided, otherwise add this round's scores
       setCumulativeTotals((prev) => {
         const nextP1 = typeof data?.player1TotalScore === 'number'
           ? Number(data.player1TotalScore)
@@ -186,21 +199,72 @@ export default function MatchmakingScreen() {
           : prev.p2 + Number(data?.player2Score ?? 0);
         return { p1: Math.max(0, nextP1), p2: Math.max(0, nextP2) };
       });
-      // Skip animated transition to results to preserve scoring/flow
       setIsTransitioningFromQuiz(false);
       setGameState('ROUND_RESULT');
     });
   }, [onRoundFinished]);
 
-  // Listen to game finished → go to MATCH_END
+  // MAtch Terminado
   useEffect(() => {
     onGameFinished((data) => {
-      setGameData(data);
+
+      setGameData(opponentAvatar ? { ...data, opponentAvatar } : data);
       setGameState('MATCH_END');
     });
   }, [onGameFinished]);
 
-  // When entering MATCH_END, fetch ELO info and prepare animation data
+
+  useEffect(() => {
+    const p1Id = (gameData as any)?.player1Id as string | undefined;
+    const p2Id = (gameData as any)?.player2Id as string | undefined;
+    if (!p1Id || !p2Id) return;
+    // Evitar refetch si los avatares ya están presentes
+    const hasP1 = Boolean((gameData as any)?.player1Avatar);
+    const hasP2 = Boolean((gameData as any)?.player2Avatar);
+    if (hasP1 && hasP2) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const resolveAvatar = async (id: string): Promise<Avatar | null> => {
+          const fetched = await getUserAvatar(id);
+          return fetched ?? null;
+        };
+        const [p1Av, p2Av] = await Promise.all([
+          hasP1 ? Promise.resolve((gameData as any)?.player1Avatar as Avatar) : resolveAvatar(p1Id),
+          hasP2 ? Promise.resolve((gameData as any)?.player2Avatar as Avatar) : resolveAvatar(p2Id),
+        ]);
+        if (!cancelled) {
+          setGameData((prev: any) => (prev ? { ...prev, player1Avatar: p1Av || undefined, player2Avatar: p2Av || undefined } : prev));
+        }
+      } catch {
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [(gameData as any)?.player1Id, (gameData as any)?.player2Id]);
+
+  useEffect(() => {
+    const p1 = (gameData as any)?.player1Id as string | undefined;
+    const p2 = (gameData as any)?.player2Id as string | undefined;
+    const myId = user?.id;
+    const inferredOpponentId = myId && p1 && p2 ? (p1 === myId ? p2 : p1) : undefined;
+    const knownOpponentId = opponent?.userId || inferredOpponentId;
+    if (!knownOpponentId || opponentAvatar) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const av = await getUserAvatar(knownOpponentId);
+        if (!cancelled && av) {
+          setOpponentAvatar(av);
+          setGameData((prev: any) => (prev ? { ...prev, opponentAvatar: av } : prev));
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [opponent?.userId, (gameData as any)?.player1Id, (gameData as any)?.player2Id, user?.id, opponentAvatar]);
+
+  // ELO
   useEffect(() => {
     const fetchElo = async () => {
       try {
@@ -233,13 +297,11 @@ export default function MatchmakingScreen() {
     }
   }, [gameState, gameData?.winner, socketId, user?.id]);
 
-  // Listen to per-answer result to advance locally
   useEffect(() => {
     onAnswerResult((result: { exerciseId: string; isCorrect: boolean; correctAnswer: number; currentScore?: number; totalExercises?: number }) => {
       if (typeof result?.currentScore === 'number') {
         setMyRoundScore(result.currentScore);
       }
-      // Clear input; advancing now happens immediately on OK press
       setAnswerText('');
     });
   }, [onAnswerResult, exercises.length]);
@@ -263,7 +325,6 @@ export default function MatchmakingScreen() {
     };
     websocketService.emit('answer-exercise', payload);
 
-    // Advance immediately to keep UX snappy; server result will update score
     setAnswerText('');
     setQuestionIndex((idx) => {
       const next = idx + 1;
@@ -407,12 +468,11 @@ export default function MatchmakingScreen() {
   };
 
   const handleExitMatchEnd = () => {
-    // Close socket session for this match and exit
     websocketService.disconnect();
     router.back();
   };
 
-  // When MATCH_FOUND appears, wait 5s then fade out and move to ROULETTE
+  // Cuando aparece MATCH_FOUND, espera 5s luego desvanece y mueve a ROULETTE
   useEffect(() => {
     if (gameState === 'MATCH_FOUND') {
       const t = setTimeout(() => {
@@ -424,7 +484,7 @@ export default function MatchmakingScreen() {
     }
   }, [gameState]);
 
-  // Render content based on game state
+  // 1v1!!
   function renderContent() {
     switch (gameState) {
       case 'MATCHMAKING':
@@ -445,7 +505,10 @@ export default function MatchmakingScreen() {
         return (
           <MatchFoundView
             me={{ username: myUsername?.toUpperCase(), avatarComponent: <LayeredAvatar avatar={avatar} size={92} /> }}
-            opponent={{ username: (opponent?.username || 'OPONENTE').toUpperCase(), avatarComponent: <LayeredAvatar avatar={avatar} size={92} /> }}
+            opponent={{
+              username: (opponent?.username || 'OPONENTE').toUpperCase(),
+              avatarComponent: <LayeredAvatar avatar={opponentAvatar || defaultAvatar} size={92} />,
+            }}
             isExiting={isExitingMatchFound}
             onExitComplete={() => {
               setGameState('ROULETTE');
@@ -455,27 +518,48 @@ export default function MatchmakingScreen() {
       case 'ROULETTE':
         return (
           <View style={styles.rouletteStage}>
-            <RouletteView
-              selectedCategory={selectedCategory}
-              me={{
-                username: (gameData?.player1Username || myUsername || 'P1').toString(),
-                avatarComponent: <LayeredAvatar avatar={avatar} size={56} />,
-                // Show cumulative total up to this point; prefer server total if present
-                totalScore: (typeof gameData?.player1TotalScore === 'number' ? gameData?.player1TotalScore : cumulativeTotals.p1),
-              }}
-              opponent={{
-                username: (gameData?.player2Username || opponent?.username || 'P2').toString(),
-                avatarComponent: <LayeredAvatar avatar={avatar} size={56} />,
-                // Show cumulative total up to this point; prefer server total if present
-                totalScore: (typeof gameData?.player2TotalScore === 'number' ? gameData?.player2TotalScore : cumulativeTotals.p2),
-              }}
-              onSpinComplete={() => {
-                // Ensure exercises are loaded before entering the quiz
-                if (exercises.length >= 6) {
-                  startRouletteToQuizTransition();
-                }
-              }}
-            />
+            {(() => {
+              // Prepare faces ensuring the local player is on the left, and scores align
+              const p1Username = (gameData?.player1Username || myUsername || 'P1').toString();
+              const p2Username = (gameData?.player2Username || opponent?.username || 'P2').toString();
+              const p1Total = (typeof gameData?.player1TotalScore === 'number' ? gameData.player1TotalScore : cumulativeTotals.p1);
+              const p2Total = (typeof gameData?.player2TotalScore === 'number' ? gameData.player2TotalScore : cumulativeTotals.p2);
+              // Only require player ids to decide sides; avoid depending on socketId here
+              const haveIds = Boolean(gameData?.player1Id && gameData?.player2Id);
+              // Decide sides using the player's userId to support being P1 or P2
+              const meIsP1 = haveIds ? (gameData?.player1Id === myUserId) : true;
+
+              const meFace = meIsP1
+                ? { username: p1Username, avatarComponent: <LayeredAvatar avatar={(gameData as any)?.player1Avatar || avatar} size={56} />, totalScore: p1Total }
+                : { username: p2Username, avatarComponent: <LayeredAvatar avatar={(gameData as any)?.player2Avatar || avatar} size={56} />, totalScore: p2Total };
+              const oppFace = meIsP1
+                ? { username: p2Username, avatarComponent: <LayeredAvatar avatar={(gameData as any)?.player2Avatar || opponentAvatar || defaultAvatar} size={56} />, totalScore: p2Total }
+                : { username: p1Username, avatarComponent: <LayeredAvatar avatar={(gameData as any)?.player1Avatar || opponentAvatar || defaultAvatar} size={56} />, totalScore: p1Total };
+
+              return (
+                <RouletteView
+                  selectedCategory={selectedCategory}
+                  player1={{
+                    userId: gameData?.player1Id,
+                    username: p1Username,
+                    avatarComponent: (gameData as any)?.player1Avatar ? <LayeredAvatar avatar={(gameData as any)?.player1Avatar} size={56} /> : null,
+                    totalScore: p1Total
+                  }}
+                  player2={{
+                    userId: gameData?.player2Id,
+                    username: p2Username,
+                    avatarComponent: (gameData as any)?.player2Avatar ? <LayeredAvatar avatar={(gameData as any)?.player2Avatar} size={56} /> : null,
+                    totalScore: p2Total
+                  }}
+                  currentUserId={myUserId}
+                  onSpinComplete={() => {
+                    if (exercises.length >= 6) {
+                      startRouletteToQuizTransition();
+                    }
+                  }}
+                />
+              );
+            })()}
           </View>
         );
       case 'QUIZ':

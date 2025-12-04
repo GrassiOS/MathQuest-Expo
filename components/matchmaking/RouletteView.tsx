@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Image, ImageSourcePropType, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type SelectedCategory = { id: string; name: string; emoji: string; color: string } | null | undefined;
 
 type Face = {
+  userId: string; // ADD THIS - we need to identify which player this is
   username: string;
   avatarComponent: React.ReactNode;
   score?: number;
@@ -15,30 +15,37 @@ type Face = {
 type Props = {
   selectedCategory?: SelectedCategory;
   onSpinComplete?: () => void;
-  me?: Face;
-  opponent?: Face;
+  player1?: Face; // Changed from "me"
+  player2?: Face; // Changed from "opponent"
+  currentUserId?: string; // ADD THIS - to know which player is the current user
 };
 
 const wheelImage: ImageSourcePropType = require('@/assets/images/competitive/roulette-2.png');
 
-// Order of slices clockwise (matching the wheel artwork); 6 slices @ 60°.
-// Index 0 corresponds to angle center at 30° when rotation = 0 and pointer at bottom.
 const CLOCKWISE_SLICE_IDS: string[] = [
-  'division',        // top (yellow)
-  'totalin',         // purple swirl
-  'sumas',           // green +
-  'restas',          // blue -
-  'multiplicacion',  // red ×
+  'division',
+  'totalin',
+  'sumas',
+  'restas',
+  'multiplicacion',
 ];
 
-export default function RouletteView({ selectedCategory, onSpinComplete, me, opponent }: Props) {
-  const rotateDeg = useRef(new Animated.Value(0)).current; // degrees
-  const insets = useSafeAreaInsets();
+export default function RouletteView({ 
+  selectedCategory, 
+  onSpinComplete, 
+  player1, 
+  player2,
+  currentUserId 
+}: Props) {
+  const rotateDeg = useRef(new Animated.Value(0)).current;
   const [landedId, setLandedId] = useState<string | undefined>(selectedCategory?.id);
   const SLICE_COUNT = CLOCKWISE_SLICE_IDS.length;
-  const SEGMENT_ANGLE = 360 / SLICE_COUNT; // 60
+  const SEGMENT_ANGLE = 360 / SLICE_COUNT;
 
-  // Helpers based on roulette-screen.tsx
+  // Determine which player is the current user
+  const isPlayer1CurrentUser = currentUserId === player1?.userId;
+  const isPlayer2CurrentUser = currentUserId === player2?.userId;
+
   const indexForCategory = (id?: string) => {
     if (!id) return 0;
     const canonical = id.toLowerCase();
@@ -49,33 +56,26 @@ export default function RouletteView({ selectedCategory, onSpinComplete, me, opp
   };
   
   const angleForIndex = (idx: number) => {
-  // Pointer is at top → rotate so that slice centers align correctly.
-  // Each slice = 60°, offset so index 0 (division) starts centered at 0° (top)
-  const SLICE_OFFSET = 30; // adjust if pointer not exactly centered on top
-  return 360 - (idx * SEGMENT_ANGLE) - SLICE_OFFSET;
-};
+    const SLICE_OFFSET = 30;
+    return 360 - (idx * SEGMENT_ANGLE) - SLICE_OFFSET;
+  };
 
-const computeLandedIndex = (angle: number) => {
-  // Normalize angle to 0–359
-  const a = ((angle % 360) + 360) % 360;
-  // Reverse math from angleForIndex, accounting for offset
-  const SLICE_OFFSET = 30;
-  const adjusted = (360 - a - SLICE_OFFSET + SEGMENT_ANGLE / 2);
-  const idx = Math.floor(adjusted / SEGMENT_ANGLE) % SLICE_COUNT;
-  return (idx + SLICE_COUNT) % SLICE_COUNT;
-};
+  const computeLandedIndex = (angle: number) => {
+    const a = ((angle % 360) + 360) % 360;
+    const SLICE_OFFSET = 30;
+    const adjusted = (360 - a - SLICE_OFFSET + SEGMENT_ANGLE / 2);
+    const idx = Math.floor(adjusted / SEGMENT_ANGLE) % SLICE_COUNT;
+    return (idx + SLICE_COUNT) % SLICE_COUNT;
+  };
 
-
-  // Compute target angle using the same math as roulette-screen.tsx
   const targetAngle = useMemo(() => {
     const idx = indexForCategory(selectedCategory?.id);
     return angleForIndex(idx);
   }, [selectedCategory?.id]);
 
   useEffect(() => {
-    // Start the spin 3s after the view mounts
     const timer = setTimeout(() => {
-      const baseSpins = 5; // full rotations
+      const baseSpins = 5;
       const final = baseSpins * 360 + targetAngle;
       Animated.timing(rotateDeg, {
         toValue: final,
@@ -83,7 +83,6 @@ const computeLandedIndex = (angle: number) => {
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start(() => {
-        // Determine landed slice using the inverse of the target angle formula
         const landedIdx = computeLandedIndex(final);
         const id = CLOCKWISE_SLICE_IDS[landedIdx];
         setLandedId(id);
@@ -94,27 +93,59 @@ const computeLandedIndex = (angle: number) => {
     return () => clearTimeout(timer);
   }, [targetAngle]);
 
-  const rotation = rotateDeg.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] });
+  const rotation = rotateDeg.interpolate({ 
+    inputRange: [0, 360], 
+    outputRange: ['0deg', '360deg'] 
+  });
 
   return (
     <View style={styles.container}>
       {/* Header with avatars and score */}
-      {(me || opponent) && (
-        <View style={[styles.header, { paddingTop: Math.max(insets.top, 8) }]}>
+      {(player1 || player2) && (
+        <View style={styles.header}>
           {/* Left player */}
           <View style={styles.playerCol}>
-            <View style={styles.avatarCircle}>{me?.avatarComponent}</View>
-            <Text style={[styles.scoreText, { fontFamily: 'Digitalt' }]}>{String((me?.totalScore ?? me?.score ?? 0)).padStart(2, '0')}</Text>
-            <Text style={[styles.usernameText, { fontFamily: 'Digitalt' }]} numberOfLines={1}>
-              @{me?.username?.toUpperCase() || 'TU'}
+            <View style={[
+              styles.avatarCircle,
+              isPlayer1CurrentUser && styles.avatarCircleHighlight
+            ]}>
+              {player1?.avatarComponent}
+            </View>
+            <Text style={[
+              styles.scoreText, 
+              { fontFamily: 'Digitalt' }
+            ]}>
+              {String((player1?.totalScore ?? player1?.score ?? 0)).padStart(2, '0')}
+            </Text>
+            <Text style={[
+              styles.usernameText, 
+              { fontFamily: 'Digitalt' },
+              isPlayer1CurrentUser && styles.usernameTextHighlight
+            ]} numberOfLines={1}>
+              @{player1?.username?.toUpperCase() || 'JUGADOR 1'}
             </Text>
           </View>
+          
           {/* Right player */}
           <View style={styles.playerCol}>
-            <View style={styles.avatarCircle}>{opponent?.avatarComponent}</View>
-            <Text style={[styles.scoreText, { fontFamily: 'Digitalt' }]}>{String((opponent?.totalScore ?? opponent?.score ?? 0)).padStart(2, '0')}</Text>
-            <Text style={[styles.usernameText, { fontFamily: 'Digitalt' }]} numberOfLines={1}>
-              @{opponent?.username?.toUpperCase() || 'OPONENTE'}
+            <View style={[
+              styles.avatarCircle,
+              isPlayer2CurrentUser && styles.avatarCircleHighlight
+            ]}>
+              {player2?.avatarComponent}
+            </View>
+            <Text style={[
+              styles.scoreText, 
+              { fontFamily: 'Digitalt' }
+            ]}>
+              {String((player2?.totalScore ?? player2?.score ?? 0)).padStart(2, '0')}
+            </Text>
+            <Text style={[
+              styles.usernameText, 
+              { fontFamily: 'Digitalt' },
+              isPlayer2CurrentUser && styles.usernameTextHighlight
+            ]} numberOfLines={1}>
+              @{player2?.username?.toUpperCase() || 'JUGADOR 2'}
             </Text>
           </View>
         </View>
@@ -126,7 +157,6 @@ const computeLandedIndex = (angle: number) => {
           <Image source={wheelImage} style={styles.wheel} resizeMode="contain" />
         </Animated.View>
       </View>
-      {/* Center circle */}
     </View>
   );
 }
@@ -143,6 +173,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
+    paddingTop: 8,
   },
   playerCol: { alignItems: 'center', gap: 6 },
   avatarCircle: {
@@ -154,9 +185,40 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  scoreText: { color: '#FFFFFF', fontSize: 28, fontWeight: '900', marginTop: 6, letterSpacing: 1 },
-  usernameText: { color: '#FFFFFF', opacity: 0.85, fontSize: 10, letterSpacing: 0.8, maxWidth: 120 },
-  wheelContainer: { width: 300, height: 300, alignItems: 'center', justifyContent: 'center' },
+  avatarCircleHighlight: {
+    borderWidth: 3,
+    borderColor: '#FFD616',
+    shadowColor: '#FFD616',
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
+  scoreText: { 
+    color: '#FFFFFF', 
+    fontSize: 28, 
+    fontWeight: '900', 
+    marginTop: 6, 
+    letterSpacing: 1 
+  },
+  usernameText: { 
+    color: '#FFFFFF', 
+    opacity: 0.85, 
+    fontSize: 10, 
+    letterSpacing: 0.8, 
+    maxWidth: 120 
+  },
+  usernameTextHighlight: { 
+    color: '#FFD616',
+    opacity: 1,
+    fontWeight: '700',
+  },
+  wheelContainer: { 
+    width: 300, 
+    height: 300, 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
   pointer: {
     position: 'absolute',
     top: -6,
@@ -177,20 +239,4 @@ const styles = StyleSheet.create({
   },
   wheelWrap: { width: 300, height: 300 },
   wheel: { width: '100%', height: '100%' },
-  centerCircle: {
-    position: 'absolute',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#EED0D7',
-    borderWidth: 3,
-    borderColor: '#000000',
-    elevation: 10,
-  },
-  labelWrap: { position: 'absolute', bottom: 80, alignItems: 'center' },
-  labelText: { color: '#FFFFFF', opacity: 0.85, fontSize: 14, letterSpacing: 1 },
-  labelName: { color: '#FFFFFF', fontSize: 20, fontWeight: '900', letterSpacing: 1.5, marginTop: 4 },
-  roundsText: { color: '#FFD45E', fontSize: 11, marginTop: 2 },
 });
-
-

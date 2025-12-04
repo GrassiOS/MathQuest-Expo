@@ -2,6 +2,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
+import { Question } from 'phosphor-react-native';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -134,7 +135,17 @@ export default function PlayScreen() {
             imagePath={require('@/assets/images/competitive/1v1_roulette.png')}
             onPress={() => router.push('/(games)/matchmaking-screen')}
           />
-          {/* TODO: Add how to play button */}
+          {/* Cómo jugar button */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.howToPlayButton}
+            onPress={() => router.push('/(modals)/how-to-play')}
+          >
+            <LinearGradient colors={['#6E72FC', '#AD1DEB']} style={styles.howToPlayGradient}>
+              <Question size={18} color="#FFFFFF" weight="bold" />
+              <Text style={[styles.howToPlayText, { fontFamily: 'Gilroy-Black' }]}>¿CÓMO JUGAR?</Text>
+            </LinearGradient>
+          </TouchableOpacity>
           
         </View>
       </SafeAreaView>
@@ -275,6 +286,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 22,
     justifyContent: 'center',
+  },
+  howToPlayButton: {
+    height: 48,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  howToPlayGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  howToPlayText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   fab: {
     position: 'absolute',

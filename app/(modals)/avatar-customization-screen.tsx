@@ -22,31 +22,118 @@ export default function AvatarCustomizationScreen() {
   const { fontsLoaded } = useFontContext();
 
   const { user } = useAuth();
-  const { avatar: currentAvatar, updateAvatar } = useAvatar();
+  const { avatar: currentAvatar, updateAvatar, isLoading: isAvatarLoading } = useAvatar();
   const [selectedCategory, setSelectedCategory] = useState<AvatarCategory>('skin');
   const [originalAvatar, setOriginalAvatar] = useState<Avatar>(currentAvatar);
+  const [draftAvatar, setDraftAvatar] = useState<Avatar>(currentAvatar);
   const [ownedProductIds, setOwnedProductIds] = useState<number[]>([]);
   const [storeItems, setStoreItems] = useState<StoreItemRow[]>([]);
   const [loadingInventory, setLoadingInventory] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  // Update original avatar when component mounts
+  // Helpers to reconcile local keys (e.g., "skin01") with remote URLs (e.g., ".../skin_01.svg")
+  const extractFilename = (uri: string) => {
+    try {
+      const withoutQuery = uri.split('?')[0].split('#')[0];
+      const parts = withoutQuery.split('/');
+      return parts[parts.length - 1] || uri;
+    } catch {
+      return uri;
+    }
+  };
+
+  const toLocalKeyFromFilename = (filename: string, category: AvatarCategory) => {
+    // Examples:
+    //  "skin_01.svg" -> "skin01"
+    //  "hair_02.svg" -> "hair02"
+    //  "eyes_04.svg" -> "eyes04"
+    //  "mouth_03.svg" -> "mouth03"
+    //  "clothes_05.svg" -> "clothes05"
+    const name = filename.replace(/\.svg.*$/i, '');
+    // Remove non-alphanumerics, keep digits and letters
+    const cleaned = name.replace(/[^a-z0-9_]/gi, '');
+    // Remove underscores to align with our keys
+    const noUnderscore = cleaned.replace(/_/g, '');
+    // Ensure it starts with category
+    if (noUnderscore.toLowerCase().startsWith(category.toLowerCase())) {
+      return noUnderscore as string;
+    }
+    // Fallback: if it contains digits, prefix with category
+    const digits = (noUnderscore.match(/\d+$/) || [''])[0];
+    if (digits) {
+      return (category + digits) as string;
+    }
+    return noUnderscore as string;
+  };
+
+  const normalizeValueForCategory = (value: string, category: AvatarCategory) => {
+    if (value === 'none') return 'none';
+    if (typeof value === 'string' && (value.includes('/') || /\.svg(\?|#|$)/i.test(value))) {
+      const filename = extractFilename(value);
+      return toLocalKeyFromFilename(filename, category);
+    }
+    return value;
+  };
+
+  // Build maps from normalized local key -> remote URL for each category (using full store catalog)
+  const keyToUrlMap = useMemo(() => {
+    const map: Record<AvatarCategory, Record<string, string>> = {
+      skin: {},
+      hair: {},
+      eyes: {},
+      mouth: {},
+      clothes: {},
+    };
+    for (const r of storeItems) {
+      const category = String(r.categoria) as AvatarCategory;
+      const url = String(r.imagen || '').trim();
+      if (!url || !map[category]) continue;
+      const filename = extractFilename(url);
+      const key = toLocalKeyFromFilename(filename, category);
+      if (key) {
+        map[category][key] = url;
+      }
+    }
+    return map;
+  }, [storeItems]);
+
+  // Resolve any local key to remote URL using the store catalog; keep 'none' intact
+  const resolveToRemoteUrl = (category: AvatarCategory, value: string | undefined) => {
+    if (!value || value === 'none') return 'none';
+    if (typeof value === 'string' && (value.includes('/') || /\.svg(\?|#|$)/i.test(value))) {
+      return value; // already a URL
+    }
+    const key = normalizeValueForCategory(value as string, category);
+    return keyToUrlMap[category][key] || 'none';
+  };
+
+  // Initialize original and draft avatar once the context finishes loading
   useEffect(() => {
-    setOriginalAvatar(currentAvatar);
-  }, []);
+    if (!isAvatarLoading) {
+      setOriginalAvatar(currentAvatar);
+      setDraftAvatar(currentAvatar);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAvatarLoading]);
+
+  // Keep draft in sync with context avatar when there are no local edits
+  useEffect(() => {
+    const noLocalEdits =
+      JSON.stringify(draftAvatar) === JSON.stringify(originalAvatar);
+    if (noLocalEdits && !isAvatarLoading) {
+      setOriginalAvatar(currentAvatar);
+      setDraftAvatar(currentAvatar);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentAvatar, isAvatarLoading]);
 
   const hasChanges = () => {
-    //print the two avatars for debugging
-    console.log('Original Avatar:', originalAvatar);
-    console.log('Current Avatar:', currentAvatar);
-    console.log('SkinAsset:', currentAvatar.skin_asset);
-    console.log('HairAsset:', currentAvatar.hair_asset);
-    return JSON.stringify(currentAvatar) !== JSON.stringify(originalAvatar);
+    return JSON.stringify(draftAvatar) !== JSON.stringify(originalAvatar);
   };
 
   const hasUnsavedChanges = useMemo(() => {
-    return JSON.stringify(currentAvatar) !== JSON.stringify(originalAvatar);
-  }, [currentAvatar, originalAvatar]);
+    return JSON.stringify(draftAvatar) !== JSON.stringify(originalAvatar);
+  }, [draftAvatar, originalAvatar]);
 
   const handleBack = () => {
     if (hasChanges()) {
@@ -58,8 +145,8 @@ export default function AvatarCustomizationScreen() {
             text: 'No guardar',
             style: 'destructive',
             onPress: () => {
-              // Revert changes
-              updateAvatar(originalAvatar);
+              // Discard local changes
+              setDraftAvatar(originalAvatar);
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
             },
@@ -67,9 +154,8 @@ export default function AvatarCustomizationScreen() {
           {
             text: 'Guardar',
             onPress: () => {
-              // Changes are already saved via updateAvatar calls
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.back();
+              // Persist draft and then exit
+              handleSave();
             },
           },
         ]
@@ -84,8 +170,10 @@ export default function AvatarCustomizationScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       setIsSaving(true);
-      // Ensure latest avatar is persisted
-      await updateAvatar(currentAvatar);
+      // Persist draft avatar to server and update context
+      await updateAvatar(draftAvatar);
+      // Baseline now matches what we saved
+      setOriginalAvatar(draftAvatar);
     } finally {
       setIsSaving(false);
       router.back();
@@ -100,7 +188,7 @@ export default function AvatarCustomizationScreen() {
   const handleAssetSelect = async (assetKey: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
-    const updatedAvatar = { ...currentAvatar };
+    const updatedAvatar = { ...draftAvatar };
     
     switch (selectedCategory) {
       case 'skin':
@@ -120,7 +208,8 @@ export default function AvatarCustomizationScreen() {
         break;
     }
     
-    await updateAvatar(updatedAvatar);
+    // Only update locally; saving happens explicitly
+    setDraftAvatar(updatedAvatar);
   };
 
   // Load owned inventory and store catalog once
@@ -169,21 +258,21 @@ export default function AvatarCustomizationScreen() {
   const getCurrentAssetKey = () => {
     switch (selectedCategory) {
       case 'skin':
-        return currentAvatar.skin_asset;
+        return draftAvatar.skin_asset;
       case 'hair':
-        return currentAvatar.hair_asset;
+        return draftAvatar.hair_asset;
       case 'eyes':
-        return currentAvatar.eyes_asset;
+        return draftAvatar.eyes_asset;
       case 'mouth':
-        return currentAvatar.mouth_asset;
+        return draftAvatar.mouth_asset;
       case 'clothes':
-        return currentAvatar.clothes_asset;
+        return draftAvatar.clothes_asset;
       default:
         return '';
     }
   };
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || isAvatarLoading) {
     return (
       <View style={styles.loadingContainer}>
         <Text>Loading...</Text>
@@ -233,7 +322,13 @@ export default function AvatarCustomizationScreen() {
         <View style={styles.avatarSection}>
           <View style={styles.avatarContainer}>
             <LayeredAvatar 
-              avatar={currentAvatar} 
+              avatar={{
+                skin_asset: resolveToRemoteUrl('skin', draftAvatar.skin_asset) as any,
+                hair_asset: resolveToRemoteUrl('hair', draftAvatar.hair_asset) as any,
+                eyes_asset: resolveToRemoteUrl('eyes', draftAvatar.eyes_asset) as any,
+                mouth_asset: resolveToRemoteUrl('mouth', draftAvatar.mouth_asset) as any,
+                clothes_asset: resolveToRemoteUrl('clothes', draftAvatar.clothes_asset) as any,
+              }} 
               size={200} 
               style={styles.avatar}
             />
@@ -299,7 +394,10 @@ export default function AvatarCustomizationScreen() {
               <FadeInView from="bottom" delay={100} duration={450} style={styles.assetsGrid}>
                 {ownedOptionsForSelectedCategory.map((opt) => {
                   const isNone = opt.svgUrl === 'none';
-                  const isSelected = getCurrentAssetKey() === opt.svgUrl;
+                  const currentKey = getCurrentAssetKey() || '';
+                  const currentNorm = normalizeValueForCategory(currentKey, selectedCategory);
+                  const optionNorm = isNone ? 'none' : normalizeValueForCategory(opt.svgUrl, selectedCategory);
+                  const isSelected = currentNorm === optionNorm;
                   return (
                     <TouchableOpacity
                       key={`${selectedCategory}-${opt.id}-${opt.svgUrl}`}

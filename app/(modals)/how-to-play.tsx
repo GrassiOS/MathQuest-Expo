@@ -47,16 +47,16 @@ export default function HowToPlayModal() {
           </View>
           <View style={styles.ruleRow}>
             <Medal size={22} color="#FFD45E" weight="fill" />
-            <Text style={styles.ruleText}>EL PRIMERO EN GANAR 2 DE 3 RONDAS, SERÁ EL GANADOR</Text>
+            <Text style={styles.ruleText}>GANA QUIEN ACUMULE MÁS PUNTOS EN LAS 3 RONDAS</Text>
           </View>
           <View style={[styles.divider, { marginVertical: 12 }]} />
           <View style={styles.ruleRow}>
             <Trophy size={22} color="#FFD700" weight="fill" />
-            <Text style={styles.ruleText}>SI GANAS: +30 ELO</Text>
+            <Text style={styles.ruleText}>SI GANAS: +30 ELO (MÁS MONEDAS)</Text>
           </View>
           <View style={styles.ruleRow}>
             <Trophy size={22} color="#FF3B30" weight="fill" />
-            <Text style={styles.ruleText}>SI PIERDES: -25 ELO</Text>
+            <Text style={styles.ruleText}>SI PIERDES: -25 ELO (MENOS MONEDAS, IGUAL RECIBES)</Text>
           </View>
         </ScrollView>
       </SafeAreaView>

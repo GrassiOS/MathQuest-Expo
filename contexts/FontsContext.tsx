@@ -12,6 +12,7 @@ export function FontProvider({ children }: { children: React.ReactNode }) {
   const [fontsLoaded] = useFonts({
     Digitalt: require('@/assets/fonts/Digitalt.otf'),
     'Gilroy-Black': require('@/assets/fonts/Gilroy-Black.ttf'),
+    'Gilroy-SemiBold': require('@/assets/fonts/Gilroy-SemiBold.ttf'),
   });
 
   useEffect(() => {

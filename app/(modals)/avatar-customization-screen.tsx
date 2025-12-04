@@ -4,12 +4,13 @@ import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LayeredAvatar } from '@/components/LayeredAvatar';
 import { FadeInView } from '@/components/shared/FadeInView';
 import { avatarAssets, categoryConfig } from '@/constants/avatarAssets';
+import { useAuth } from '@/contexts/AuthContext';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useFontContext } from '@/contexts/FontsContext';
 import { getStoreItems, getUserInventoryProductIds, StoreItemRow } from '@/services/SupabaseService';
@@ -20,12 +21,14 @@ const { width, height } = Dimensions.get('window');
 export default function AvatarCustomizationScreen() {
   const { fontsLoaded } = useFontContext();
 
+  const { user } = useAuth();
   const { avatar: currentAvatar, updateAvatar } = useAvatar();
   const [selectedCategory, setSelectedCategory] = useState<AvatarCategory>('skin');
   const [originalAvatar, setOriginalAvatar] = useState<Avatar>(currentAvatar);
   const [ownedProductIds, setOwnedProductIds] = useState<number[]>([]);
   const [storeItems, setStoreItems] = useState<StoreItemRow[]>([]);
   const [loadingInventory, setLoadingInventory] = useState<boolean>(true);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // Update original avatar when component mounts
   useEffect(() => {
@@ -40,6 +43,10 @@ export default function AvatarCustomizationScreen() {
     console.log('HairAsset:', currentAvatar.hair_asset);
     return JSON.stringify(currentAvatar) !== JSON.stringify(originalAvatar);
   };
+
+  const hasUnsavedChanges = useMemo(() => {
+    return JSON.stringify(currentAvatar) !== JSON.stringify(originalAvatar);
+  }, [currentAvatar, originalAvatar]);
 
   const handleBack = () => {
     if (hasChanges()) {
@@ -69,6 +76,18 @@ export default function AvatarCustomizationScreen() {
       );
     } else {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      router.back();
+    }
+  };
+
+  const handleSave = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      setIsSaving(true);
+      // Ensure latest avatar is persisted
+      await updateAvatar(currentAvatar);
+    } finally {
+      setIsSaving(false);
       router.back();
     }
   };
@@ -186,11 +205,28 @@ export default function AvatarCustomizationScreen() {
             <FontAwesome5 name="chevron-left" size={20} color="#fff" />
           </TouchableOpacity>
           
-          <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>
-            PERSONALIZAR AVATAR!
-          </Text>
+          <View style={{ flex: 1 }} />
           
-          <View style={styles.headerSpacer} />
+          <TouchableOpacity 
+            onPress={handleSave} 
+            style={styles.saveButtonWrapper}
+            disabled={!hasUnsavedChanges || isSaving}
+          >
+            {isSaving ? (
+              <View style={[styles.saveButton, styles.saveButtonDisabled]}>
+                <ActivityIndicator size="small" color="#7c3aed" />
+                <Text style={styles.saveButtonText}>Guardando…</Text>
+              </View>
+            ) : hasUnsavedChanges ? (
+              <View style={[styles.saveButton, styles.saveButtonActive]}>
+                <Text style={styles.saveButtonText}>Guardar</Text>
+              </View>
+            ) : (
+              <View style={[styles.saveButton, styles.saveButtonDisabled]}>
+                <Text style={styles.saveButtonText}>Guardar</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Avatar Display */}
@@ -202,6 +238,16 @@ export default function AvatarCustomizationScreen() {
               style={styles.avatar}
             />
           </View>
+        </View>
+
+        {/* Title and Username below Avatar */}
+        <View style={styles.titleSection}>
+          <Text style={[styles.title, { fontFamily: 'Digitalt' }]}>
+            AVATAR!
+          </Text>
+          <Text style={[styles.usernameText, { fontFamily: 'Digitalt' }]}>
+            {user?.username ? user.username : 'Usuario'}
+          </Text>
         </View>
 
         {/* Category Navigation */}
@@ -344,6 +390,36 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 40,
   },
+  saveButtonWrapper: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  saveButton: {
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  saveButtonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  saveButtonActive: {
+    backgroundColor: '#fff',
+  },
+  saveButtonText: {
+    color: '#7c3aed',
+    fontWeight: 'bold',
+  },
+  saveButtonTextOnGradient: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  saveGradient: {
+    borderRadius: 20,
+  },
   avatarSection: {
     alignItems: 'center',
     paddingVertical: 20,
@@ -364,12 +440,22 @@ const styles = StyleSheet.create({
   avatar: {
     borderRadius: 100,
   },
+  titleSection: {
+    alignItems: 'center',
+    paddingBottom: 10,
+  },
   categoryNavigation: {
     flexDirection: 'row',
     justifyContent: 'center',
     paddingHorizontal: 30,
     paddingVertical: 20,
     gap: 15,
+  },
+  usernameText: {
+    color: '#fff',
+    marginTop: 6,
+    fontSize: 14,
+    opacity: 0.9,
   },
   categoryButton: {
     width: 50,

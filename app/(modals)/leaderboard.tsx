@@ -5,10 +5,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LayeredAvatar } from '@/components/LayeredAvatar';
+import { FadeInView } from '@/components/shared/FadeInView';
 import { useAuth } from '@/contexts/AuthContext';
 import { getLeaderboard, LeaderboardEntry } from '@/services/SupabaseService';
-import { FadeInView } from '@/components/shared/FadeInView';
-import { LayeredAvatar } from '@/components/LayeredAvatar';
 
 const { width } = Dimensions.get('window');
 
@@ -70,7 +70,7 @@ export default function LeaderboardModal() {
           <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Text style={styles.closeText}>×</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>CLASIFICACIÓN</Text>
+          <Text style={styles.title}>RANKING</Text>
           <View style={{ width: 28 }} />
         </View>
 
@@ -319,6 +319,7 @@ const styles = StyleSheet.create({
   pointsSmall: {
     color: 'rgba(255,255,255,0.85)',
     fontSize: 12,
+    fontFamily: 'Gilroy-SemiBold',
   },
   rankPill: {
     backgroundColor: 'rgba(255,255,255,0.14)',

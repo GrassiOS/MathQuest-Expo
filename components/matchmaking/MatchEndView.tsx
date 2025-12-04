@@ -1,3 +1,5 @@
+import { useAuth } from '@/contexts/AuthContext';
+import { incrementCurrentUserCoins } from '@/services/SupabaseService';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -17,8 +19,12 @@ type Props = {
 };
 
 export default function MatchEndView({ didWin, player1Username, player2Username, player1TotalScore, player2TotalScore, pointsDelta, eloInfo, onExit }: Props) {
+  const { user } = useAuth();
+  const currentUsername = (user?.username ?? '').trim().toLowerCase();
+  const isPlayer1CurrentUser = (player1Username ?? '').trim().toLowerCase() === currentUsername && currentUsername.length > 0;
+  const isPlayer2CurrentUser = (player2Username ?? '').trim().toLowerCase() === currentUsername && currentUsername.length > 0;
   const title = didWin ? '¡GANASTE!' : 'PERDISTE';
-  const deltaPrefix = pointsDelta > 0 ? '+' : '';
+  const deltaPrefix = pointsDelta > 0 ? '+' : '-';
   const deltaColor = didWin ? '#10B981' : '#EF4444';
   const currentElo = typeof eloInfo?.currentElo === 'number' && Number.isFinite(eloInfo.currentElo) ? Math.max(0, Math.round(eloInfo.currentElo)) : null;
   const beforeElo = typeof eloInfo?.beforeElo === 'number' && Number.isFinite(eloInfo.beforeElo) ? Math.max(0, Math.round(eloInfo.beforeElo)) : null;
@@ -31,6 +37,9 @@ export default function MatchEndView({ didWin, player1Username, player2Username,
   const eloValue = useRef(new Animated.Value(hasElo ? beforeElo! : 0)).current;
   const [displayElo, setDisplayElo] = useState<number>(hasElo ? beforeElo! : 0);
   const [confettiVisible, setConfettiVisible] = useState<boolean>(didWin);
+  const [coinsLottieVisible, setCoinsLottieVisible] = useState<boolean>(false);
+  const [coinsAwarded, setCoinsAwarded] = useState<number>(0);
+  const hasAwardedCoinsRef = useRef<boolean>(false);
 
   // Interpolate bar width between the min and max of before/current
   const minElo = useMemo(() => (hasElo ? Math.min(beforeElo!, currentElo!) : 0), [hasElo, beforeElo, currentElo]);
@@ -120,6 +129,39 @@ export default function MatchEndView({ didWin, player1Username, player2Username,
     };
   }, [didWin, pointsDelta, hasElo, beforeElo, currentElo, deltaValue, eloValue]);
   
+  // Award coins once per match end view mount
+  useEffect(() => {
+    if (hasAwardedCoinsRef.current) return;
+    hasAwardedCoinsRef.current = true;
+
+    // Assume "Points" refers to the current player's total score:
+    // winner's score if didWin, otherwise loser's score.
+    const myScore = didWin
+      ? Math.max(player1TotalScore ?? 0, player2TotalScore ?? 0)
+      : Math.min(player1TotalScore ?? 0, player2TotalScore ?? 0);
+
+    const base = Math.floor((myScore || 0) / 10);
+    const coinsToAdd = base > 0 ? (didWin ? base * 3 : base) : 0;
+
+    if (coinsToAdd <= 0) return;
+
+    setCoinsAwarded(coinsToAdd);
+
+    // Show coin lottie after a delay (after ELO animation completes)
+    const coinsDelay = setTimeout(() => {
+      setCoinsLottieVisible(true);
+      // Fire-and-forget: update server coins
+      (async () => {
+        try {
+          await incrementCurrentUserCoins(coinsToAdd);
+        } catch {
+          // ignore errors; user coins can be refreshed elsewhere
+        }
+      })();
+    }, 3200); // Show after ELO animation
+
+    return () => clearTimeout(coinsDelay);
+  }, [didWin, player1TotalScore, player2TotalScore]);
 
   return (
     <View style={styles.container}>
@@ -146,38 +188,92 @@ export default function MatchEndView({ didWin, player1Username, player2Username,
 
         <FadeInView delay={1200} duration={300} from="bottom" style={styles.deltaBox}>
           <Text style={[styles.deltaText, { color: deltaColor, fontFamily: 'Digitalt' }]}>{deltaPrefix}{displayDelta}</Text>
-          <Text style={styles.deltaCaption}>PUNTOS</Text>
+          <Text style={[styles.deltaCaption, { fontFamily: 'Gilroy-Black' }]}>PUNTOS</Text>
         </FadeInView>
 
-        {hasElo && (
-          <FadeInView delay={2600} duration={300} from="bottom" style={styles.eloContainer}>
-            <View style={styles.eloHeader}>
-              <Text style={[styles.eloTitle, { fontFamily: 'Gilroy-Black' }]}>ELO</Text>
-              <Text style={[styles.eloValue, { fontFamily: 'Digitalt', color: isUp ? '#34D399' : '#F87171' }]}>{displayElo}</Text>
-            </View>
-            <View style={styles.progressTrack}>
-              <Animated.View
-                style={[
-                  styles.progressFill,
-                  {
-                    ...(barWidthStyle as any),
-                    backgroundColor: isUp ? '#34D399' : '#F87171',
-                  },
-                ]}
-              />
-            </View>
-          </FadeInView>
-        )}
+        {/* Always reserve space for ELO, show only if available */}
+        <View style={styles.eloContainer}>
+          {hasElo ? (
+            <FadeInView delay={2600} duration={300} from="bottom">
+              <View style={styles.eloHeader}>
+                <Text style={[styles.eloTitle, { fontFamily: 'Gilroy-Black' }]}>ELO</Text>
+                <Text style={[styles.eloValue, { fontFamily: 'Digitalt', color: isUp ? '#34D399' : '#F87171' }]}>{displayElo}</Text>
+              </View>
+              <View style={styles.progressTrack}>
+                <Animated.View
+                  style={[
+                    styles.progressFill,
+                    {
+                      ...(barWidthStyle as any),
+                      backgroundColor: isUp ? '#34D399' : '#F87171',
+                    },
+                  ]}
+                />
+              </View>
+            </FadeInView>
+          ) : null}
+        </View>
 
         <View style={styles.scoresBox}>
           <View style={styles.scoreRow}>
-            <Text style={[styles.userText, { fontFamily: 'Digitalt' }]} numberOfLines={1}>{player1Username?.toUpperCase() || 'P1'}</Text>
-            <Text style={[styles.scoreText, { fontFamily: 'Digitalt' }]}>{player1TotalScore ?? 0}</Text>
+            <Text
+              style={[
+                styles.userText,
+                { fontFamily: 'Gilroy-Black' },
+                isPlayer1CurrentUser && styles.userTextHighlight,
+              ]}
+              numberOfLines={1}
+            >
+              @{player1Username?.toUpperCase() || 'P1'}
+            </Text>
+            <Text 
+              style={[
+                styles.scoreText, 
+                { fontFamily: 'Digitalt' },
+                isPlayer1CurrentUser && styles.scoreTextHighlight,
+              ]}
+            >
+              {player1TotalScore ?? 0}
+            </Text>
           </View>
           <View style={styles.scoreRow}>
-            <Text style={[styles.userText, { fontFamily: 'Digitalt' }]} numberOfLines={1}>{player2Username?.toUpperCase() || 'P2'}</Text>
-            <Text style={[styles.scoreText, { fontFamily: 'Digitalt' }]}>{player2TotalScore ?? 0}</Text>
+            <Text
+              style={[
+                styles.userText,
+                { fontFamily: 'Gilroy-Black' },
+                isPlayer2CurrentUser && styles.userTextHighlight,
+              ]}
+              numberOfLines={1}
+            >
+              @{player2Username?.toUpperCase() || 'P2'}
+            </Text>
+            <Text 
+              style={[
+                styles.scoreText, 
+                { fontFamily: 'Digitalt' },
+                isPlayer2CurrentUser && styles.scoreTextHighlight,
+              ]}
+            >
+              {player2TotalScore ?? 0}
+            </Text>
           </View>
+        </View>
+
+        {/* Always reserve space for coins */}
+        <View style={styles.coinsContainer}>
+          {coinsLottieVisible && coinsAwarded > 0 ? (
+            <FadeInView delay={0} duration={400}>
+              <View pointerEvents="none" style={styles.coinsContent}>
+                <LottieView
+                  source={require('@/assets/lotties/extras/MQ-Coins.json')}
+                  autoPlay
+                  loop
+                  style={styles.coinsLottie}
+                />
+                <Text style={[styles.coinsText, { fontFamily: 'Gilroy-Black' }]}>{coinsAwarded}</Text>
+              </View>
+            </FadeInView>
+          ) : null}
         </View>
 
         <FadeInView delay={3800} duration={300} from="bottom">
@@ -220,19 +316,40 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
   },
-  eloContainer: { width: '100%', marginBottom: 18 },
+  coinsContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 20,
+    minHeight: 120, // Reserve space to prevent layout shift
+  },
+  coinsContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coinsLottie: {
+    width: 100,
+    height: 100,
+  },
+  coinsText: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '900',
+    marginTop: -10,
+  },
+  eloContainer: { width: '100%', marginBottom: 18, minHeight: 48 }, // Reserve space for ELO section
   eloHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingHorizontal: 2 },
   eloTitle: { color: '#FFFFFF', fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
   eloValue: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
   progressTrack: { width: '100%', height: 10, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.18)', overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 6 },
-  scoresBox: { width: '100%', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 16, padding: 16, gap: 12, marginBottom: 24 },
+  scoresBox: { width: '100%', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 16, padding: 16, gap: 12, marginBottom: 0 },
   scoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  userText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+  userText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
+  userTextHighlight: { color: '#FFD616' },
   scoreText: { color: '#FFFFFF', fontSize: 22, fontWeight: '900' },
+  scoreTextHighlight: { color: '#FFD616' },
   exitButton: { height: 56, borderRadius: 28, overflow: 'hidden' },
   exitButtonGradient: { height: '100%', width: 180, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  exitText: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
+  exitText: { color: '#FFFFF3', fontSize: 18, fontWeight: '900' },
 });
-
-

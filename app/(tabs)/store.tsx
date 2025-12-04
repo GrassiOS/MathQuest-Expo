@@ -27,7 +27,7 @@ import { FadeInView } from '@/components/shared/FadeInView';
 import { useAvatar } from '@/contexts/AvatarContext';
 import { useFontContext } from '@/contexts/FontsContext';
 import { useItemStore } from '@/hooks/useItemStore';
-import { incrementCurrentUserCoins, getUserInventoryProductIds, purchaseStoreItem } from '@/services/SupabaseService';
+import { getUserInventoryProductIds, incrementCurrentUserCoins, purchaseStoreItem } from '@/services/SupabaseService';
 import { router } from 'expo-router';
 
 export default function StoreScreen() {

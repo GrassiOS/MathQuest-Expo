@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import LottieView from 'lottie-react-native';
 
 type Props = {
@@ -8,10 +8,13 @@ type Props = {
   player2Username: string;
   player1Score: number;
   player2Score: number;
+  player1TotalBefore?: number;
+  player2TotalBefore?: number;
   winner: string | null | undefined;
   mySocketId?: string | undefined;
   player1Id?: string | undefined;
   player2Id?: string | undefined;
+  onDone?: () => void;
 };
 
 export default function RoundResultView({
@@ -20,20 +23,23 @@ export default function RoundResultView({
   player2Username,
   player1Score,
   player2Score,
+  player1TotalBefore = 0,
+  player2TotalBefore = 0,
   winner,
   mySocketId,
   player1Id,
   player2Id,
+  onDone,
 }: Props) {
   // Keep the local player on the left when IDs allow it
   const computedLeftRight = useMemo(() => {
-    const p1 = { username: player1Username, score: player1Score, id: player1Id };
-    const p2 = { username: player2Username, score: player2Score, id: player2Id };
+    const p1 = { username: player1Username, score: player1Score, id: player1Id, totalBefore: player1TotalBefore };
+    const p2 = { username: player2Username, score: player2Score, id: player2Id, totalBefore: player2TotalBefore };
     if (mySocketId && p2.id && p2.id === mySocketId) {
       return { left: p2, right: p1 };
     }
     return { left: p1, right: p2 };
-  }, [player1Username, player2Username, player1Score, player2Score, player1Id, player2Id, mySocketId]);
+  }, [player1Username, player2Username, player1Score, player2Score, player1Id, player2Id, player1TotalBefore, player2TotalBefore, mySocketId]);
 
   const leftIsMe = Boolean(mySocketId && computedLeftRight.left.id && computedLeftRight.left.id === mySocketId);
   const rightIsMe = Boolean(mySocketId && computedLeftRight.right.id && computedLeftRight.right.id === mySocketId);
@@ -41,37 +47,98 @@ export default function RoundResultView({
   const leftName = leftIsMe ? 'TU' : (computedLeftRight.left.username || 'P1');
   const rightName = rightIsMe ? 'TU' : (computedLeftRight.right.username || 'P2');
 
-  // Count-up animation for scores (about 2.2s), then reveal result after a short pause
-  const [displayLeftScore, setDisplayLeftScore] = useState(0);
-  const [displayRightScore, setDisplayRightScore] = useState(0);
+  // Animation values: fade in totals, then count-up to totals + round, then reveal result and hint
+  const totalsOpacity = useRef(new Animated.Value(0)).current;
+  const resultOpacity = useRef(new Animated.Value(0)).current;
+  const leftTotalValue = useRef(new Animated.Value(computedLeftRight.left.totalBefore || 0)).current;
+  const rightTotalValue = useRef(new Animated.Value(computedLeftRight.right.totalBefore || 0)).current;
+  const [displayLeftTotal, setDisplayLeftTotal] = useState<number>(computedLeftRight.left.totalBefore || 0);
+  const [displayRightTotal, setDisplayRightTotal] = useState<number>(computedLeftRight.right.totalBefore || 0);
   const [showResult, setShowResult] = useState(false);
-  const timerRef = useRef<NodeJS.Timer | null>(null);
 
   useEffect(() => {
-    const DURATION_MS = 2200;
-    const START = Date.now();
-    timerRef.current = setInterval(() => {
-      const elapsed = Date.now() - START;
-      const p = Math.min(1, elapsed / DURATION_MS);
-      setDisplayLeftScore(Math.round(computedLeftRight.left.score * p));
-      setDisplayRightScore(Math.round(computedLeftRight.right.score * p));
-      if (p >= 1) {
-        if (timerRef.current) clearInterval(timerRef.current);
-        setTimeout(() => setShowResult(true), 600); // reveal after a brief pause
-      }
-    }, 30);
+    const leftListener = leftTotalValue.addListener(({ value }) => setDisplayLeftTotal(Math.round(value)));
+    const rightListener = rightTotalValue.addListener(({ value }) => setDisplayRightTotal(Math.round(value)));
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (leftListener) leftTotalValue.removeListener(leftListener);
+      if (rightListener) rightTotalValue.removeListener(rightListener);
+      leftTotalValue.removeAllListeners();
+      rightTotalValue.removeAllListeners();
     };
-  }, [computedLeftRight.left.score, computedLeftRight.right.score]);
+  }, [leftTotalValue, rightTotalValue]);
+
+  useEffect(() => {
+    totalsOpacity.setValue(0);
+    resultOpacity.setValue(0);
+    leftTotalValue.setValue(computedLeftRight.left.totalBefore || 0);
+    rightTotalValue.setValue(computedLeftRight.right.totalBefore || 0);
+    setDisplayLeftTotal(computedLeftRight.left.totalBefore || 0);
+    setDisplayRightTotal(computedLeftRight.right.totalBefore || 0);
+    setShowResult(false);
+
+    const fadeInTotals = Animated.timing(totalsOpacity, {
+      toValue: 1,
+      duration: 600,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+
+    const COUNT_DURATION_MS = 2200;
+    const addLeft = Animated.timing(leftTotalValue, {
+      toValue: (computedLeftRight.left.totalBefore || 0) + (computedLeftRight.left.score || 0),
+      duration: COUNT_DURATION_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+    const addRight = Animated.timing(rightTotalValue, {
+      toValue: (computedLeftRight.right.totalBefore || 0) + (computedLeftRight.right.score || 0),
+      duration: COUNT_DURATION_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+
+    fadeInTotals.start(() => {
+      Animated.parallel([addLeft, addRight]).start(() => {
+        setTimeout(() => {
+          setShowResult(true);
+          Animated.timing(resultOpacity, {
+            toValue: 1,
+            duration: 500,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }).start(() => {
+            setTimeout(() => {
+              if (onDone) onDone();
+            }, 2500);
+          });
+        }, 400);
+      });
+    });
+    return () => {
+      totalsOpacity.stopAnimation();
+      resultOpacity.stopAnimation();
+    };
+  }, [computedLeftRight.left.totalBefore, computedLeftRight.right.totalBefore, computedLeftRight.left.score, computedLeftRight.right.score, onDone, totalsOpacity, resultOpacity, leftTotalValue, rightTotalValue]);
 
   const didIWin = Boolean(winner && mySocketId && winner === mySocketId);
   const resultText = !winner ? 'Empate' : didIWin ? '¡Ganaste esta ronda!' : 'Ganó tu oponente';
   const resultColor = !winner ? '#FFD60A' : didIWin ? '#34C759' : '#FF3B30';
+  const myBefore = leftIsMe ? (computedLeftRight.left.totalBefore || 0) : (computedLeftRight.right.totalBefore || 0);
+  const oppBefore = leftIsMe ? (computedLeftRight.right.totalBefore || 0) : (computedLeftRight.left.totalBefore || 0);
+  const iWasLeading = myBefore > oppBefore;
+
+  const hintText = useMemo(() => {
+    if (!winner) {
+      return iWasLeading ? '¡Sigue así!' : '¡Vamos, tú puedes!';
+    }
+    if (didIWin) {
+      return iWasLeading ? '¡Sigue así!' : '¡Vas remontando!';
+    }
+    return iWasLeading ? '¡Pero sigues ganando!' : '¡No te rindas!';
+  }, [didIWin, iWasLeading, winner]);
 
   return (
     <View style={styles.resultContainer}>
-      {/* Confetti overlay, only after the reveal and only if I won */}
       {showResult && didIWin && (
         <LottieView
           source={require('@/assets/lotties/extras/Confetti_quick.json')}
@@ -81,15 +148,18 @@ export default function RoundResultView({
         />
       )}
       <Text style={styles.resultTitle}>RONDA {roundNumber}</Text>
-      <Text style={styles.resultVs}>
-        {leftName} {showResult ? computedLeftRight.left.score : displayLeftScore} - {showResult ? computedLeftRight.right.score : displayRightScore} {rightName}
-      </Text>
+      <Animated.Text style={[styles.resultVs, { opacity: totalsOpacity }]}>
+        {leftName} {displayLeftTotal} - {displayRightTotal} {rightName}
+      </Animated.Text>
       {showResult ? (
-        <Text style={[styles.resultWinner, { color: resultColor }]}>{resultText}</Text>
+        <>
+          <Animated.Text style={[styles.resultWinner, { color: resultColor, opacity: resultOpacity }]}>{resultText}</Animated.Text>
+          <Animated.Text style={[styles.resultHint, { opacity: resultOpacity }]}>{hintText}</Animated.Text>
+          <Text style={styles.resultHint}>Esperando la siguiente ronda...</Text>
+        </>
       ) : (
         <Text style={styles.resultHint}>Calculando puntajes…</Text>
       )}
-      {showResult && <Text style={styles.resultHint}>Esperando la siguiente ronda...</Text>}
     </View>
   );
 }

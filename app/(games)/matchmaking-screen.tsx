@@ -90,6 +90,7 @@ export default function MatchmakingScreen() {
   const [selectedCategory, setSelectedCategory] = useState<{ id: string; name: string; emoji: string; color: string } | undefined>(undefined);
   const [eloInfo, setEloInfo] = useState<{ currentElo: number; beforeElo: number } | null>(null);
   const [cumulativeTotals, setCumulativeTotals] = useState<{ p1: number; p2: number }>({ p1: 0, p2: 0 });
+  const [roundBeforeTotals, setRoundBeforeTotals] = useState<{ p1: number; p2: number }>({ p1: 0, p2: 0 });
 
   // Quiz state
   type Exercise = { id: string; question: string; answer: number; options?: number[]; category: string; startTime?: number };
@@ -167,6 +168,14 @@ export default function MatchmakingScreen() {
   useEffect(() => {
     onRoundFinished((data) => {
       setGameData(data);
+      setRoundBeforeTotals({
+        p1: typeof data?.player1TotalScore === 'number' && typeof data?.player1Score === 'number'
+          ? Math.max(0, Number(data.player1TotalScore) - Number(data.player1Score))
+          : cumulativeTotals.p1,
+        p2: typeof data?.player2TotalScore === 'number' && typeof data?.player2Score === 'number'
+          ? Math.max(0, Number(data.player2TotalScore) - Number(data.player2Score))
+          : cumulativeTotals.p2,
+      });
       // Update cumulative totals using server totals if provided, otherwise add this round's scores
       setCumulativeTotals((prev) => {
         const nextP1 = typeof data?.player1TotalScore === 'number'
@@ -493,8 +502,12 @@ export default function MatchmakingScreen() {
             player2Username={gameData?.player2Username || 'P2'}
             player1Score={gameData?.player1Score ?? 0}
             player2Score={gameData?.player2Score ?? 0}
+            player1TotalBefore={roundBeforeTotals.p1}
+            player2TotalBefore={roundBeforeTotals.p2}
             winner={gameData?.winner}
             mySocketId={socketId}
+            player1Id={gameData?.player1Id}
+            player2Id={gameData?.player2Id}
           />
         );
       case 'MATCH_END':
